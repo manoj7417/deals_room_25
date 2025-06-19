@@ -1,14 +1,17 @@
 // Database Types based on your schema
 
+export interface UserSession {
+  email: string;
+  name: string;
+  userId: number;
+  loginTime: number;
+}
+
 export interface User {
   id: number;
   name: string;
   email: string;
   password: string;
-  verified: boolean;
-  is_admin: boolean;
-  profile_image_url?: string;
-  resources: string[];
   primary_resource: string[];
   created_at: string;
   updated_at: string;
@@ -16,45 +19,11 @@ export interface User {
 
 export interface Seller {
   id: number;
-  user_id: number;
-  company_name: string;
+  name: string;
   business_type: string;
-  address: string;
-  phone: string;
-  website?: string;
-  description?: string;
-  profile_picture_url?: string;
-  aadhar_url?: string;
-  gst_certificate_url?: string;
-  work_photos_urls?: string[];
-  owner_photos_urls?: string[];
-  skills: string[];
-  languages: string[];
-  average_rating: string;
-  total_reviews: number;
-  is_verified: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Portfolio {
-  id: number;
-  seller_id: number;
-  title: string;
-  description: string;
-  image_url: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Gig {
-  id: number;
-  seller_id: number;
-  title: string;
-  description: string;
-  image_url: string;
-  price: string;
-  status: string;
+  location: string;
+  contact_info: string;
+  user_id: number;
   created_at: string;
   updated_at: string;
 }
@@ -64,7 +33,7 @@ export interface Deal {
   title: string;
   description: string;
   category: string;
-  status: 'active' | 'completed' | 'pending';
+  status: string;
   sender_id: number;
   created_at: string;
   updated_at: string;
@@ -76,139 +45,110 @@ export interface DM {
   sender_id: number;
   receiver_id: number;
   deal_id?: number;
+  is_read: boolean;
   created_at: string;
   updated_at: string;
-  is_read: boolean;
 }
 
 export interface Announcement {
   id: number;
-  seller_id: number;
-  category: 'PROJECT & CONSTRUCTION RESOURCES' | 'BUSINESS RESOURCES' | 'STUDENT RESOURCES';
-  subcategory: string;
   title: string;
-  description: string;
-  icon: string;
-  details: string;
-  ad_type: 'scroll' | 'flip';
-  status: 'active' | 'inactive' | 'pending';
-  start_date: string;
-  end_date?: string;
+  content: string;
+  priority: string;
+  category: string;
+  status: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface Product {
   id: number;
-  seller_id: number;
   name: string;
   description: string;
-  price: string;
-  image?: string;
-  category: 'Land' | 'Machines' | 'Material' | 'Equipment' | 'Tools' | 'Manpower';
-  brand_name?: string;
-  model?: string;
-  material?: string;
-  color?: string;
-  packaging_details?: string;
-  delivery_info?: string;
-  supply_ability?: string;
-  moq?: number;
-  status: 'active' | 'inactive';
+  price: number;
+  category: string;
+  seller_id: number;
+  images: string[];
+  specifications: Record<string, any>;
+  availability_status: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface Tender {
   id: number;
-  user_id: number;
-  upc_ref: string;
-  engineering_category: 'civil' | 'mechanical' | 'electrical' | 'chemical' | 'environmental';
-  specialization: string;
-  tender_name: string;
-  location: string;
-  scope: string;
-  estimated_value: string;
-  collection_date: string;
-  submission_date: string;
-  contact_name: string;
-  contact_number: string;
-  contact_email: string;
-  address: string;
-  document_urls: string[];
-  status: 'active' | 'inactive' | 'pending' | 'expired';
+  title: string;
+  description: string;
+  requirements: Record<string, any>;
+  budget_range: string;
+  deadline: string;
+  status: string;
+  created_by: number;
   created_at: string;
   updated_at: string;
 }
 
 export interface LandListing {
   id: number;
-  user_id: number;
   title: string;
-  location: string;
-  area: string; // decimal
-  price: string; // decimal
-  land_type: 'residential' | 'commercial' | 'agricultural' | 'industrial' | 'vacant';
   description: string;
-  image_urls: string[];
-  document_urls: string[];
-  status: 'active' | 'inactive' | 'pending' | 'expired';
+  location: string;
+  area_size: number;
+  price_per_unit: number;
+  total_price: number;
+  land_type: string;
+  ownership_type: string;
+  amenities: string[];
+  seller_id: number;
+  status: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface Machine {
   id: number;
-  user_id: number;
-  title: string;
-  type: string;
-  brand: string;
-  model: string;
-  year: number;
-  condition: 'new' | 'like-new' | 'excellent' | 'good' | 'fair' | 'used' | 'refurbished' | 'needs-repair' | 'for-parts';
-  price: string;
-  location: string;
+  name: string;
   description: string;
-  image_urls: string[];
-  document_urls: string[];
-  status: 'active' | 'inactive' | 'pending' | 'expired';
+  model: string;
+  year_of_manufacture: number;
+  condition: string;
+  price: number;
+  rental_price?: number;
+  seller_id: number;
+  images: string[];
+  specifications: Record<string, any>;
+  availability_status: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface Material {
   id: number;
-  user_id: number;
-  title: string;
-  type: 'cement' | 'steel' | 'bricks' | 'sand' | 'wood' | 'pipes' | 'electrical' | 'other';
-  quantity: string;
-  unit: 'kg' | 'tons' | 'bags' | 'pieces' | 'meters' | 'sqft' | 'cuft' | 'liters';
-  price: string;
-  grade?: string;
-  location: string;
-  delivery: 'pickup' | 'delivery' | 'both';
+  name: string;
   description: string;
-  image_urls: string[];
-  certificate_urls: string[];
-  status: 'active' | 'inactive' | 'pending' | 'expired';
+  quality_grade: string;
+  price_per_unit: number;
+  available_quantity: number;
+  unit_of_measurement: string;
+  seller_id: number;
+  images: string[];
+  specifications: Record<string, any>;
+  availability_status: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface Job {
   id: number;
-  user_id: number;
   title: string;
-  company: string;
   description: string;
-  requirements: string;
-  salary?: string;
+  requirements: Record<string, any>;
+  compensation: string;
   location: string;
-  job_type: 'full-time' | 'part-time' | 'contract' | 'freelance' | 'internship' | 'temporary';
-  experience: 'entry' | 'junior' | 'mid' | 'senior' | 'lead' | 'executive';
-  industry: string;
-  document_urls: string[];
-  status: 'active' | 'inactive' | 'pending' | 'expired';
+  job_type: string;
+  experience_level: string;
+  posted_by: number;
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -218,10 +158,11 @@ export interface Notification {
   user_id: number;
   title: string;
   message: string;
-  type: string;
-  entity_id: number;
+  type: string; // 'dm_request' | 'dm_message' | 'general'
   is_read: boolean;
+  related_id?: number;
   created_at: string;
+  updated_at: string;
 }
 
 // Insert types (without id, created_at, updated_at)

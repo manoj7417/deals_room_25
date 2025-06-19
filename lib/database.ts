@@ -767,6 +767,16 @@ export const notifications = {
     return { count, error }
   },
 
+  create: async (notification: Omit<Notification, 'id' | 'created_at' | 'updated_at'>) => {
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert(notification)
+      .select()
+      .single()
+      .returns<Notification>()
+    return { data, error }
+  },
+
   markAsRead: async (notificationId: number) => {
     const { data, error } = await supabase
       .from('notifications')

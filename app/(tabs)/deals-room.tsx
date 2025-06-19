@@ -1,20 +1,20 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { auth, deals, dms, users } from '@/lib';
+import { auth, deals, dms, notifications, users } from '@/lib';
 import { sessionStorage } from '@/lib/sessionStorage';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    RefreshControl,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity
+  Alert,
+  Dimensions,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -27,7 +27,7 @@ export default function DealsRoomTab() {
   // Public Chat State
   const [publicMessages, setPublicMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [messageCategory, setMessageCategory] = useState('general');
+  const [replyingTo, setReplyingTo] = useState<any>(null); // For reply functionality
   
   // DM State
   const [dmConversations, setDmConversations] = useState<any[]>([]);
@@ -46,24 +46,30 @@ export default function DealsRoomTab() {
   // Channel refs for cleanup
   const publicChannelRef = useRef<any>(null);
   const dmChannelRef = useRef<any>(null);
+  const notificationChannelRef = useRef<any>(null);
+
+  // Notification state
+  const [dmNotifications, setDmNotifications] = useState<any[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   useEffect(() => {
     checkAuthStatus();
     loadCurrentUser();
     loadAllUsers();
     
+    // Cleanup function to unsubscribe from realtime when component unmounts
     return () => {
-      // Cleanup subscriptions properly
-      console.log('🧹 Cleaning up subscriptions on unmount');
       if (publicChannelRef.current) {
-        console.log('Removing public channel on unmount');
+        console.log('🧹 Cleaning up public channel subscription');
         supabase.removeChannel(publicChannelRef.current);
-        publicChannelRef.current = null;
       }
       if (dmChannelRef.current) {
-        console.log('Removing DM channel on unmount');
+        console.log('🧹 Cleaning up DM channel subscription');
         supabase.removeChannel(dmChannelRef.current);
-        dmChannelRef.current = null;
+      }
+      if (notificationChannelRef.current) {
+        console.log('🧹 Cleaning up notification channel subscription');
+        supabase.removeChannel(notificationChannelRef.current);
       }
     };
   }, []);
@@ -79,6 +85,7 @@ export default function DealsRoomTab() {
       console.log('✅ All dependencies ready, loading data and setting up realtime...');
       loadPublicMessages();
       loadDMConversations();
+      loadDMNotifications(); // Load notifications
       
       // Add a small delay to ensure everything is loaded
       setTimeout(() => {
@@ -92,79 +99,19 @@ export default function DealsRoomTab() {
     }
   }, [currentUser, allUsers]);
 
-  // Test function to verify connectivity
-  const testRealtimeConnection = async () => {
-    console.log('=== TESTING REALTIME CONNECTION ===');
-    console.log('Current state:', {
-      currentUser: currentUser?.name,
-      publicChannelExists: !!publicChannelRef.current,
-      dmChannelExists: !!dmChannelRef.current,
-      publicMessagesCount: publicMessages.length
-    });
-    
-    // Test basic database connection
-    try {
-      console.log('Testing database connection...');
-      const { data: testData, error: testError } = await supabase
-        .from('deals')
-        .select('*')
-        .limit(1);
-      
-      if (testError) {
-        console.error('❌ Database connection failed:', testError);
-        Alert.alert('Database Error', JSON.stringify(testError));
-        return;
-      }
-      
-      console.log('✅ Database connection successful, sample data:', testData);
-    } catch (error) {
-      console.error('❌ Database connection error:', error);
-      Alert.alert('Connection Error', error.message);
-      return;
+  // Separate effect to handle selectedConversation changes
+  useEffect(() => {
+    if (currentUser && selectedConversation) {
+      console.log('🔄 Selected conversation changed, updating real-time subscription context:', {
+        partnerId: selectedConversation.partnerId,
+        partnerName: selectedConversation.partnerName
+      });
     }
-    
-    // Test Supabase realtime status
-    console.log('Checking Supabase realtime status...');
-    const channels = supabase.getChannels();
-    console.log('Active channels:', channels.map(ch => ch.topic));
-    
-    // Force reload subscriptions
-    console.log('🔄 Forcing subscription reload...');
-    setupRealtimeSubscriptions();
-    
-    // Test creating a sample message
-    if (!currentUser) {
-      Alert.alert('Error', 'No current user found');
-      return;
-    }
-    
-    try {
-      const testMessage = {
-        title: `🧪 Test message from ${currentUser.name}`,
-        description: `Realtime test at ${new Date().toLocaleTimeString()} - If you see this instantly, realtime works!`,
-        category: 'general',
-        status: 'active',
-        sender_id: currentUser.id
-      };
-      
-      console.log('Creating test message:', testMessage);
-      
-      const { data, error } = await deals.create(testMessage);
-      
-      if (error) {
-        console.error('❌ Test message creation failed:', error);
-        Alert.alert('Message Creation Error', JSON.stringify(error));
-        return;
-      }
-      
-      console.log('✅ Test message created successfully:', data);
-      Alert.alert('Success', 'Test message created! Watch for real-time update...');
-      
-    } catch (error) {
-      console.error('❌ Test message error:', error);
-      Alert.alert('Test Error', error.message);
-    }
-  };
+  }, [selectedConversation, currentUser]);
+
+
+
+
 
   const checkAuthStatus = async () => {
     try {
@@ -229,63 +176,131 @@ export default function DealsRoomTab() {
   };
 
   const loadDMConversations = async () => {
+    if (!currentUser) return;
+    
     try {
-      if (!currentUser) return;
-      
       const { data: dmData } = await dms.getAll();
       if (dmData) {
-        const userDMs = dmData.filter(dm => 
-          dm.sender_id === currentUser.id || dm.receiver_id === currentUser.id
-        );
+        // Group DMs by conversation partner
+        const conversationMap: {[key: number]: any} = {};
         
-        const conversations = {};
-        userDMs.forEach(dm => {
+        dmData.forEach(dm => {
           const partnerId = dm.sender_id === currentUser.id ? dm.receiver_id : dm.sender_id;
-          if (!conversations[partnerId]) {
-            conversations[partnerId] = {
+          const isUnread = !dm.is_read && dm.receiver_id === currentUser.id;
+          
+          if (!conversationMap[partnerId]) {
+            conversationMap[partnerId] = {
               partnerId,
-              partnerName: 'Unknown User',
+              partnerName: userMap[partnerId]?.name || 'Unknown User',
               lastMessage: dm.message,
               lastMessageTime: dm.created_at,
               unreadCount: 0,
               messages: []
             };
           }
-          conversations[partnerId].messages.push(dm);
           
-          if (!dm.is_read && dm.receiver_id === currentUser.id) {
-            conversations[partnerId].unreadCount++;
+          if (dm.created_at > conversationMap[partnerId].lastMessageTime) {
+            conversationMap[partnerId].lastMessage = dm.message;
+            conversationMap[partnerId].lastMessageTime = dm.created_at;
           }
           
-          if (new Date(dm.created_at) > new Date(conversations[partnerId].lastMessageTime)) {
-            conversations[partnerId].lastMessage = dm.message;
-            conversations[partnerId].lastMessageTime = dm.created_at;
+          if (isUnread) {
+            conversationMap[partnerId].unreadCount++;
           }
         });
         
-        const conversationList = await Promise.all(
-          Object.values(conversations).map(async (conv: any) => {
-            const { data: partnerData } = await users.getById(conv.partnerId);
-            return {
-              ...conv,
-              partnerName: partnerData?.name || 'Unknown User'
-            };
-          })
+        const conversations = Object.values(conversationMap).sort((a: any, b: any) => 
+          new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
         );
         
-        setDmConversations(conversationList.sort((a, b) => 
-          new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
-        ));
+        setDmConversations(conversations);
       }
     } catch (error) {
       console.error('Error loading DM conversations:', error);
     }
   };
 
-  const setupRealtimeSubscriptions = () => {
+  // Load DM notifications
+  const loadDMNotifications = async () => {
+    if (!currentUser) return;
+    
+    try {
+      console.log('📢 Loading DM notifications for user:', currentUser.id);
+      const { data: notificationData } = await notifications.getUserNotifications(currentUser.id);
+      
+      if (notificationData) {
+        // Filter for DM notifications only (both requests and messages)
+        const dmNotifs = notificationData.filter(notif => 
+          (notif.type === 'dm_request' || notif.type === 'dm_message') && !notif.is_read
+        );
+        console.log(`📢 Found ${dmNotifs.length} unread DM notifications`);
+        
+        setDmNotifications(dmNotifs);
+        setUnreadNotificationCount(dmNotifs.length);
+      }
+    } catch (error) {
+      console.error('❌ Error loading DM notifications:', error);
+    }
+  };
+
+  // Create DM notification when someone wants to start a chat or sends a message
+  const createDMNotification = async (targetUserId: number, senderName: string, messageText?: string) => {
+    try {
+      console.log('📢 Creating DM notification for user:', targetUserId);
+      
+      const notification = {
+        user_id: targetUserId,
+        title: messageText ? 'New Message' : 'New Chat Request',
+        message: messageText ? `${senderName}: ${messageText.slice(0, 50)}${messageText.length > 50 ? '...' : ''}` : `${senderName} wants to start a conversation with you`,
+        type: messageText ? 'dm_message' : 'dm_request',
+        is_read: false,
+        related_id: currentUser.id // Store sender's ID as related_id
+      };
+      
+      const { data, error } = await notifications.create(notification);
+      
+      if (error) {
+        console.error('❌ Error creating DM notification:', error);
+      } else {
+        console.log('✅ DM notification created successfully:', data);
+      }
+    } catch (error) {
+      console.error('❌ Error creating DM notification:', error);
+    }
+  };
+
+  // Clear DM notifications when user opens the chat
+  const clearDMNotification = async (senderId: number) => {
+    try {
+      console.log('🔄 Clearing DM notifications from sender:', senderId);
+      
+      // Find all notifications for this sender (both requests and messages)
+      const notificationsToMark = dmNotifications.filter(notif => notif.related_id === senderId);
+      
+      for (const notification of notificationsToMark) {
+        await notifications.markAsRead(notification.id);
+      }
+      
+      if (notificationsToMark.length > 0) {
+        console.log(`✅ Cleared ${notificationsToMark.length} DM notifications`);
+        
+        // Reload notifications to update UI
+        loadDMNotifications();
+      }
+    } catch (error) {
+      console.error('❌ Error clearing DM notifications:', error);
+    }
+  };
+
+  const setupRealtimeSubscriptions = async () => {
     console.log('🚀 Setting up realtime subscriptions...');
     console.log('Current user:', currentUser?.name);
     console.log('User map size:', Object.keys(userMap).length);
+    
+    if (!currentUser) {
+      console.error('❌ No current user, cannot setup realtime');
+      return;
+    }
     
     // Clean up existing subscriptions first
     if (publicChannelRef.current) {
@@ -308,10 +323,28 @@ export default function DealsRoomTab() {
       dmChannelRef.current = null;
     }
 
+    // Test database connection first
+    try {
+      console.log('🔍 Testing database connection...');
+      const { data: testData, error: testError } = await supabase
+        .from('deals')
+        .select('id')
+        .limit(1);
+      
+      if (testError) {
+        console.error('❌ Database connection failed:', testError);
+        return;
+      }
+      console.log('✅ Database connection successful');
+    } catch (error) {
+      console.error('❌ Database connection error:', error);
+      return;
+    }
+
     // Create unique channel name
     const timestamp = Date.now();
-    const publicChannelName = `public-messages-${currentUser?.id}-${timestamp}`;
-    const dmChannelName = `direct-messages-${currentUser?.id}-${timestamp}`;
+    const publicChannelName = `public-messages-${currentUser.id}-${timestamp}`;
+    const dmChannelName = `direct-messages-${currentUser.id}-${timestamp}`;
 
     console.log(`📡 Creating public channel: ${publicChannelName}`);
     
@@ -327,12 +360,10 @@ export default function DealsRoomTab() {
         },
         (payload) => {
           console.log('🎉 === PUBLIC MESSAGE RECEIVED ===');
-          console.log('Event type:', payload.eventType);
-          console.log('Table:', payload.table);
-          console.log('Full payload:', JSON.stringify(payload, null, 2));
+          console.log('Payload:', payload);
           
           const newMessage = payload.new;
-          console.log('New message data:', newMessage);
+          console.log('New message:', newMessage);
           
           // Add user info to the message
           const senderName = userMap[newMessage.sender_id]?.name || 'Unknown User';
@@ -341,42 +372,39 @@ export default function DealsRoomTab() {
             senderName
           };
           
-          console.log('Message with user info:', messageWithUser);
-          console.log('Sender name resolved to:', senderName);
-          
+          console.log('Adding message to state...');
           setPublicMessages(prev => {
-            console.log('📝 Current messages count:', prev.length);
-            
             // Check if message already exists to avoid duplicates
             const exists = prev.some(msg => msg.id === newMessage.id);
-            console.log('Message already exists?', exists);
-            
             if (exists) {
               console.log('⚠️ Duplicate message detected, skipping');
               return prev;
             }
             
+            console.log('✅ Adding new message to state');
             const newMessages = [...prev, messageWithUser];
-            console.log('📈 New messages count:', newMessages.length);
-            console.log('📋 Updated messages list:', newMessages.map(m => ({ id: m.id, desc: m.description.substring(0, 30) })));
+            
+            // Scroll to bottom when new message arrives
+            setTimeout(() => {
+              publicChatRef.current?.scrollToEnd({ animated: true });
+            }, 100);
             
             return newMessages;
           });
-          
-          // Scroll to bottom when new message arrives
-          setTimeout(() => {
-            console.log('📜 Scrolling to end...');
-            publicChatRef.current?.scrollToEnd({ animated: true });
-          }, 200);
         }
       )
-      .subscribe((status) => {
-        console.log(`📡 Public channel (${publicChannelName}) status:`, status);
+      .subscribe((status, err) => {
+        console.log(`📡 Public channel status: ${status}`);
+        
+        if (err) {
+          console.error('❌ Public channel error:', err);
+        }
         
         if (status === 'SUBSCRIBED') {
           console.log('✅ Successfully subscribed to public messages');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ Error subscribing to public messages');
+          console.error('Make sure Realtime is enabled on the "deals" table in Supabase Dashboard');
         } else if (status === 'TIMED_OUT') {
           console.error('⏰ Timeout subscribing to public messages');
         } else if (status === 'CLOSED') {
@@ -398,46 +426,215 @@ export default function DealsRoomTab() {
         },
         (payload) => {
           console.log('💬 === DM RECEIVED ===');
-          console.log('DM payload:', JSON.stringify(payload, null, 2));
+          console.log('DM payload:', payload);
           const newDM = payload.new;
           
-          // If it's for current conversation, add to messages
-          if (selectedConversation && 
-              ((newDM.sender_id === currentUser?.id && newDM.receiver_id === selectedConversation.partnerId) ||
-               (newDM.sender_id === selectedConversation.partnerId && newDM.receiver_id === currentUser?.id))) {
-            
-            console.log('💬 DM is for current conversation, adding to messages');
-            setDmMessages(prev => {
-              // Check if message already exists to avoid duplicates
-              const exists = prev.some(msg => msg.id === newDM.id);
-              if (exists) return prev;
-              
-              return [...prev, newDM];
-            });
-            
-            // Scroll to bottom when new message arrives
-            setTimeout(() => {
-              dmChatRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-          } else {
-            console.log('💬 DM not for current conversation or no conversation selected');
+          console.log('DM details:', {
+            senderId: newDM.sender_id,
+            receiverId: newDM.receiver_id,
+            currentUserId: currentUser.id,
+            message: newDM.message
+          });
+          
+          // Check if this DM involves the current user
+          const isForCurrentUser = newDM.sender_id === currentUser.id || newDM.receiver_id === currentUser.id;
+          
+          if (!isForCurrentUser) {
+            console.log('💬 DM not for current user, ignoring');
+            return;
           }
           
-          // Reload conversations to update counts and last messages
+          console.log('💬 DM is for current user, processing...');
+          
+          // Update DM messages only if it's for the currently selected conversation
+          setSelectedConversation(prevConversation => {
+            if (!prevConversation) {
+              console.log('💬 No conversation selected, not adding to current messages');
+              return prevConversation;
+            }
+            
+            const isForSelectedConversation = 
+              (newDM.sender_id === currentUser.id && newDM.receiver_id === prevConversation.partnerId) ||
+              (newDM.sender_id === prevConversation.partnerId && newDM.receiver_id === currentUser.id);
+            
+            if (isForSelectedConversation) {
+              console.log('💬 Message is for current conversation, adding to messages');
+              
+              // Add message to current conversation messages
+              setDmMessages(prevMessages => {
+                // Check if message already exists to avoid duplicates
+                const exists = prevMessages.some(msg => msg.id === newDM.id);
+                if (exists) {
+                  console.log('⚠️ Duplicate DM detected, skipping');
+                  return prevMessages;
+                }
+                
+                console.log('✅ Adding new DM to current conversation messages');
+                const updatedMessages = [...prevMessages, newDM];
+                
+                // Scroll to bottom when new message arrives
+                setTimeout(() => {
+                  if (dmChatRef.current) {
+                    dmChatRef.current.scrollToEnd({ animated: true });
+                  }
+                }, 100);
+                
+                return updatedMessages;
+              });
+            } else {
+              console.log('💬 Message is not for current conversation, will only update conversation list');
+            }
+            
+            return prevConversation;
+          });
+          
+          // Always reload conversations to update counts and last messages
+          console.log('🔄 Reloading DM conversations...');
           loadDMConversations();
         }
       )
-      .subscribe((status) => {
-        console.log(`📱 DM channel (${dmChannelName}) status:`, status);
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'dms' 
+        },
+        (payload) => {
+          console.log('💬 === DM UPDATED ===');
+          console.log('DM update payload:', payload);
+          
+          // Handle message read status updates
+          const updatedDM = payload.new;
+          const isForCurrentUser = updatedDM.sender_id === currentUser.id || updatedDM.receiver_id === currentUser.id;
+          
+          if (isForCurrentUser) {
+            console.log('🔄 Reloading conversations due to DM update...');
+            loadDMConversations();
+            
+            // If it's for current conversation, update the message
+            if (selectedConversation) {
+              const isForSelectedConversation = 
+                (updatedDM.sender_id === currentUser.id && updatedDM.receiver_id === selectedConversation.partnerId) ||
+                (updatedDM.sender_id === selectedConversation.partnerId && updatedDM.receiver_id === currentUser.id);
+              
+              if (isForSelectedConversation) {
+                setDmMessages(prev => 
+                  prev.map(msg => msg.id === updatedDM.id ? updatedDM : msg)
+                );
+              }
+            }
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        console.log(`📱 DM channel status: ${status}`);
+        
+        if (err) {
+          console.error('❌ DM channel error:', err);
+        }
         
         if (status === 'SUBSCRIBED') {
           console.log('✅ Successfully subscribed to DMs');
         } else if (status === 'CHANNEL_ERROR') {
           console.error('❌ Error subscribing to DMs');
+          console.error('🔧 SOLUTION: Enable Realtime on the "dms" table in Supabase Dashboard');
+          console.error('📋 Steps: Dashboard → Database → Tables → dms → Enable Realtime toggle');
         } else if (status === 'TIMED_OUT') {
           console.error('⏰ Timeout subscribing to DMs');
+          console.error('🔧 Check your internet connection and Supabase status');
         } else if (status === 'CLOSED') {
           console.log('🔒 DM channel subscription closed');
+        }
+      });
+      
+    console.log(`📢 Creating notification channel: notifications-${currentUser.id}`);
+    
+    // Subscribe to notifications for current user
+    notificationChannelRef.current = supabase
+      .channel(`notifications-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'notifications',
+          filter: `user_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          console.log('📢 === NOTIFICATION RECEIVED ===');
+          console.log('Notification payload:', payload);
+          const newNotification = payload.new;
+          
+          if (newNotification.type === 'dm_request' || newNotification.type === 'dm_message') {
+            console.log('📢 New DM notification received:', newNotification.type);
+            setDmNotifications(prev => {
+              const exists = prev.some(notif => notif.id === newNotification.id);
+              if (exists) return prev;
+              
+              return [newNotification, ...prev];
+            });
+            
+            setUnreadNotificationCount(prev => prev + 1);
+            
+            // Show toast/alert for new DM
+            const senderName = userMap[newNotification.related_id]?.name || 'Someone';
+            if (newNotification.type === 'dm_request') {
+              Alert.alert(
+                '💬 New Chat Request', 
+                `${senderName} wants to start a conversation with you. Check Direct Messages to respond.`,
+                [{ text: 'OK' }]
+              );
+            } else {
+              // For new messages, show a more subtle notification
+              console.log('📢 New message notification from:', senderName);
+              // Only show alert if not currently in DM tab or not in conversation with sender
+              if (activeTab !== 'dm' || selectedConversation?.partnerId !== newNotification.related_id) {
+                Alert.alert(
+                  '💬 New Message', 
+                  newNotification.message,
+                  [{ text: 'OK' }]
+                );
+              }
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'notifications',
+          filter: `user_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          console.log('📢 === NOTIFICATION UPDATED ===');
+          const updatedNotification = payload.new;
+          
+          if (updatedNotification.is_read && (updatedNotification.type === 'dm_request' || updatedNotification.type === 'dm_message')) {
+            console.log('📢 DM notification marked as read');
+            setDmNotifications(prev => 
+              prev.filter(notif => notif.id !== updatedNotification.id)
+            );
+            setUnreadNotificationCount(prev => Math.max(0, prev - 1));
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        console.log(`📢 Notification channel status: ${status}`);
+        
+        if (err) {
+          console.error('❌ Notification channel error:', err);
+        }
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to notifications');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Error subscribing to notifications');
+          console.error('🔧 SOLUTION: Enable Realtime on the "notifications" table in Supabase Dashboard');
+        } else if (status === 'CLOSED') {
+          console.log('🔒 Notification channel subscription closed');
         }
       });
       
@@ -445,10 +642,25 @@ export default function DealsRoomTab() {
     setTimeout(() => {
       const channels = supabase.getChannels();
       console.log('🏁 Final subscription state:');
-      console.log('Active channels:', channels.map(ch => ({ topic: ch.topic, state: ch.state })));
+      console.log('Active channels:', channels.length);
+      channels.forEach(ch => {
+        console.log(`  - ${ch.topic}: ${ch.state}`);
+      });
       console.log('Public channel ref exists:', !!publicChannelRef.current);
       console.log('DM channel ref exists:', !!dmChannelRef.current);
-    }, 2000);
+      console.log('Notification channel ref exists:', !!notificationChannelRef.current);
+      
+      // Show setup instructions if no channels are active
+      if (channels.length === 0 || channels.every(ch => ch.state !== 'joined')) {
+        console.warn('⚠️ No active realtime channels found!');
+        console.warn('📋 SETUP INSTRUCTIONS:');
+        console.warn('1. Go to Supabase Dashboard → Database → Tables');
+        console.warn('2. Click on "deals" table → Enable Realtime');
+        console.warn('3. Click on "dms" table → Enable Realtime');
+        console.warn('4. Click on "notifications" table → Enable Realtime');
+        console.warn('5. Refresh the app');
+      }
+    }, 3000);
   };
 
   const sendPublicMessage = async () => {
@@ -463,7 +675,8 @@ export default function DealsRoomTab() {
     console.log('Sending public message:', {
       message: newMessage,
       user: currentUser.name,
-      userId: currentUser.id
+      userId: currentUser.id,
+      replyingTo: replyingTo?.id
     });
     
     try {
@@ -487,6 +700,7 @@ export default function DealsRoomTab() {
       
       console.log('✅ Message sent successfully:', data);
       setNewMessage('');
+      setReplyingTo(null); // Clear reply after sending
     } catch (error) {
       console.error('Error sending public message:', error);
       Alert.alert('Error', 'Failed to send message: ' + error.message);
@@ -494,31 +708,106 @@ export default function DealsRoomTab() {
   };
 
   const sendDirectMessage = async () => {
-    if (!newDmMessage.trim() || !currentUser || !selectedConversation) return;
+    if (!newDmMessage.trim() || !currentUser || !selectedConversation) {
+      console.log('Cannot send DM - missing data:', { 
+        messageLength: newDmMessage.trim().length, 
+        hasUser: !!currentUser,
+        hasConversation: !!selectedConversation 
+      });
+      return;
+    }
+    
+    console.log('Sending DM:', {
+      message: newDmMessage,
+      senderId: currentUser.id,
+      receiverId: selectedConversation.partnerId,
+      senderName: currentUser.name,
+      receiverName: selectedConversation.partnerName
+    });
     
     try {
-      const { data, error } = await dms.create({
+      const dmData = {
         message: newDmMessage,
         sender_id: currentUser.id,
         receiver_id: selectedConversation.partnerId,
         is_read: false
-      });
+      };
+      
+      console.log('DM data to send:', dmData);
+      
+      const { data, error } = await dms.create(dmData);
       
       if (error) {
         console.error('Error creating DM:', error);
-        Alert.alert('Error', 'Failed to send message');
+        Alert.alert('Error', 'Failed to send message: ' + error.message);
         return;
       }
       
-      console.log('DM sent successfully:', data);
+      console.log('✅ DM sent successfully:', data);
+      
+      // Create notification for the receiver about the new message
+      await createDMNotification(selectedConversation.partnerId, currentUser.name, newDmMessage.trim());
+      
       setNewDmMessage('');
+      
+      // Add message to local state immediately for better UX
+      if (data) {
+        setDmMessages(prev => [...prev, data]);
+        
+        // Scroll to bottom
+        setTimeout(() => {
+          dmChatRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+      
+      // Refresh conversation list to update last message
+      loadDMConversations();
+      
     } catch (error) {
       console.error('Error sending DM:', error);
-      Alert.alert('Error', 'Failed to send message');
+      Alert.alert('Error', 'Failed to send message: ' + error.message);
+    }
+  };
+
+  const handleDirectMessageTo = (senderId: number) => {
+    console.log('🔄 Starting DM with user:', senderId);
+    const user = userMap[senderId];
+    
+    if (!user) {
+      console.error('❌ User not found in userMap for ID:', senderId);
+      console.log('Available users:', Object.keys(userMap));
+      return;
+    }
+    
+    if (user.id === currentUser?.id) {
+      console.log('❌ Cannot DM yourself');
+      return;
+    }
+    
+    console.log('✅ Found user:', { id: user.id, name: user.name });
+    
+    // Create notification for the target user
+    createDMNotification(user.id, currentUser.name);
+    
+    // Find existing conversation or create new one
+    const existingConversation = dmConversations.find(conv => conv.partnerId === user.id);
+    
+    if (existingConversation) {
+      console.log('📱 Opening existing conversation with:', user.name);
+      openConversation(existingConversation);
+    } else {
+      console.log('📱 Starting new conversation with:', user.name);
+      startNewConversation(user);
     }
   };
 
   const startNewConversation = (user: any) => {
+    console.log('🆕 Creating new conversation:', {
+      partnerId: user.id,
+      partnerName: user.name,
+      currentUserId: currentUser?.id
+    });
+    
     setSelectedConversation({
       partnerId: user.id,
       partnerName: user.name,
@@ -526,31 +815,69 @@ export default function DealsRoomTab() {
     });
     setDmMessages([]);
     setActiveTab('dm');
+    
+    console.log('✅ New conversation created and DM tab activated');
   };
 
   const openConversation = async (conversation: any) => {
+    console.log('📂 Opening conversation:', {
+      partnerId: conversation.partnerId,
+      partnerName: conversation.partnerName,
+      currentUserId: currentUser?.id
+    });
+    
+    // Clear any notifications from this sender
+    await clearDMNotification(conversation.partnerId);
+    
+    // Set conversation first
     setSelectedConversation(conversation);
+    setActiveTab('dm'); // Make sure we switch to DM tab
     
     try {
+      console.log('📥 Loading conversation messages...');
       const { data: dmData } = await dms.getAll();
+      
       if (dmData) {
         const conversationMessages = dmData.filter(dm =>
           (dm.sender_id === currentUser.id && dm.receiver_id === conversation.partnerId) ||
           (dm.sender_id === conversation.partnerId && dm.receiver_id === currentUser.id)
         ).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         
+        console.log(`📨 Found ${conversationMessages.length} messages in conversation`);
+        console.log('📨 Setting DM messages for conversation:', conversationMessages.map(m => ({
+          id: m.id,
+          message: m.message.substring(0, 30) + '...',
+          senderId: m.sender_id,
+          receiverId: m.receiver_id
+        })));
+        
         setDmMessages(conversationMessages);
         
+        // Scroll to bottom after setting messages
+        setTimeout(() => {
+          if (dmChatRef.current) {
+            dmChatRef.current.scrollToEnd({ animated: false });
+          }
+        }, 100);
+        
+        // Mark messages as read
+        let readCount = 0;
         for (const message of conversationMessages) {
           if (!message.is_read && message.receiver_id === currentUser.id) {
             await dms.update(message.id, { is_read: true });
+            readCount++;
           }
         }
         
-        loadDMConversations();
+        if (readCount > 0) {
+          console.log(`✅ Marked ${readCount} messages as read`);
+          loadDMConversations(); // Refresh conversation list to update unread counts
+        }
+        
+        console.log('✅ Conversation loaded successfully');
       }
     } catch (error) {
-      console.error('Error loading conversation messages:', error);
+      console.error('❌ Error loading conversation messages:', error);
     }
   };
 
@@ -568,6 +895,15 @@ export default function DealsRoomTab() {
     return userMap[senderId]?.name || 'Unknown User';
   };
 
+  // New functions for reply and DM functionality
+  const handleReplyToMessage = (message: any) => {
+    setReplyingTo(message);
+  };
+
+  const cancelReply = () => {
+    setReplyingTo(null);
+  };
+
   const renderPublicMessage = ({ item }: { item: any }) => {
     const isOwnMessage = item.sender_id === currentUser?.id;
     const senderName = isOwnMessage ? 'You' : getSenderName(item.sender_id);
@@ -583,8 +919,29 @@ export default function DealsRoomTab() {
           </ThemedText>
         </ThemedView>
         <ThemedText style={styles.messageText}>{item.description}</ThemedText>
-        <ThemedView style={styles.categoryBadge}>
-          <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
+        <ThemedView style={styles.messageFooter}>
+          <ThemedView style={styles.categoryBadge}>
+            <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
+          </ThemedView>
+          {!isOwnMessage && (
+            <ThemedView style={styles.messageActions}>
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => handleReplyToMessage(item)}
+              >
+                <ThemedText style={styles.actionButtonText}>↩️ Reply</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.actionButton}
+                onPress={() => {
+                  console.log('🚀 DM Button Clicked! Sender ID:', item.sender_id);
+                  handleDirectMessageTo(item.sender_id);
+                }}
+              >
+                <ThemedText style={styles.actionButtonText}>💬 DM</ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+          )}
         </ThemedView>
       </ThemedView>
     );
@@ -654,6 +1011,60 @@ export default function DealsRoomTab() {
     );
   };
 
+  // Handle notification click - opens chat and clears notification
+  const handleNotificationClick = async (notification: any) => {
+    const senderId = notification.related_id;
+    const senderUser = userMap[senderId];
+    
+    if (!senderUser) {
+      console.error('❌ Sender user not found for notification');
+      return;
+    }
+    
+    console.log('📢 Notification clicked, opening chat with:', senderUser.name);
+    
+    // Clear the notification
+    await clearDMNotification(senderId);
+    
+    // Find or create conversation
+    const existingConversation = dmConversations.find(conv => conv.partnerId === senderId);
+    
+    if (existingConversation) {
+      openConversation(existingConversation);
+    } else {
+      startNewConversation(senderUser);
+    }
+  };
+
+  const renderNotification = ({ item }: { item: any }) => {
+    const senderName = userMap[item.related_id]?.name || 'Unknown User';
+    
+    return (
+      <TouchableOpacity 
+        style={styles.notificationItem}
+        onPress={() => handleNotificationClick(item)}
+      >
+        <ThemedView style={styles.notificationLeft}>
+          <ThemedView style={styles.notificationIcon}>
+            <ThemedText style={styles.notificationIconText}>💬</ThemedText>
+          </ThemedView>
+          <ThemedView style={styles.notificationContent}>
+            <ThemedText style={styles.notificationTitle}>{item.title}</ThemedText>
+            <ThemedText style={styles.notificationMessage}>{item.message}</ThemedText>
+          </ThemedView>
+        </ThemedView>
+        <ThemedView style={styles.notificationRight}>
+          <ThemedText style={styles.notificationTime}>
+            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </ThemedText>
+          <ThemedView style={styles.newBadge}>
+            <ThemedText style={styles.newBadgeText}>NEW</ThemedText>
+          </ThemedView>
+        </ThemedView>
+      </TouchableOpacity>
+    );
+  };
+
   // DM Chat View
   if (selectedConversation && activeTab === 'dm') {
     return (
@@ -703,12 +1114,6 @@ export default function DealsRoomTab() {
       <ThemedView style={styles.header}>
         <ThemedView style={styles.headerTop}>
           <ThemedText style={styles.headerTitle}>Deals Room</ThemedText>
-          <TouchableOpacity 
-            style={styles.testButton}
-            onPress={testRealtimeConnection}
-          >
-            <ThemedText style={styles.testButtonText}>Test RT</ThemedText>
-          </TouchableOpacity>
         </ThemedView>
         <ThemedView style={styles.tabContainer}>
           <TouchableOpacity
@@ -723,9 +1128,18 @@ export default function DealsRoomTab() {
             style={[styles.tab, activeTab === 'dm' && styles.activeTab]}
             onPress={() => setActiveTab('dm')}
           >
-            <ThemedText style={[styles.tabText, activeTab === 'dm' && styles.activeTabText]}>
-              Direct Messages
-            </ThemedText>
+            <ThemedView style={styles.tabWithBadge}>
+              <ThemedText style={[styles.tabText, activeTab === 'dm' && styles.activeTabText]}>
+                Direct Messages
+              </ThemedText>
+              {unreadNotificationCount > 0 && (
+                <ThemedView style={styles.notificationBadge}>
+                  <ThemedText style={styles.notificationBadgeText}>
+                    {unreadNotificationCount}
+                  </ThemedText>
+                </ThemedView>
+              )}
+            </ThemedView>
           </TouchableOpacity>
         </ThemedView>
       </ThemedView>
@@ -746,12 +1160,27 @@ export default function DealsRoomTab() {
             onLayout={() => publicChatRef.current?.scrollToEnd({ animated: false })}
           />
 
+          {/* Reply indicator */}
+          {replyingTo && (
+            <ThemedView style={styles.replyIndicator}>
+              <ThemedView style={styles.replyIndicatorContent}>
+                <ThemedText style={styles.replyIndicatorLabel}>Replying to {getSenderName(replyingTo.sender_id)}:</ThemedText>
+                <ThemedText style={styles.replyIndicatorText} numberOfLines={1}>
+                  {replyingTo.description}
+                </ThemedText>
+              </ThemedView>
+              <TouchableOpacity onPress={cancelReply} style={styles.cancelReplyButton}>
+                <ThemedText style={styles.cancelReplyText}>✕</ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+          )}
+
           <ThemedView style={styles.inputContainer}>
             <TextInput
               style={styles.messageInput}
               value={newMessage}
               onChangeText={setNewMessage}
-              placeholder="Share a deal or announcement..."
+              placeholder={replyingTo ? `Reply to ${getSenderName(replyingTo.sender_id)}...` : "Share a deal or announcement..."}
               multiline
             />
             <TouchableOpacity style={styles.sendButton} onPress={sendPublicMessage}>
@@ -761,18 +1190,39 @@ export default function DealsRoomTab() {
         </KeyboardAvoidingView>
       ) : (
         <ThemedView style={styles.dmContainer}>
-          {dmConversations.length > 0 ? (
-            <FlatList
-              data={dmConversations}
-              renderItem={renderConversation}
-              keyExtractor={(item) => item.partnerId.toString()}
-              style={styles.conversationsList}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            />
-          ) : (
-            <ThemedView style={styles.emptyState}>
-              <ThemedText style={styles.emptyStateText}>No conversations yet</ThemedText>
+          {/* Notifications Section */}
+          {dmNotifications.length > 0 && (
+            <ThemedView style={styles.notificationsSection}>
+              <ThemedText style={styles.sectionTitle}>
+                💬 Chat Requests ({dmNotifications.length})
+              </ThemedText>
+              <FlatList
+                data={dmNotifications}
+                renderItem={renderNotification}
+                keyExtractor={(item) => item.id.toString()}
+                scrollEnabled={false}
+              />
             </ThemedView>
+          )}
+          
+          {/* Conversations Section */}
+          {dmConversations.length > 0 ? (
+            <ThemedView style={styles.conversationsSection}>
+              <ThemedText style={styles.sectionTitle}>Your Conversations</ThemedText>
+              <FlatList
+                data={dmConversations}
+                renderItem={renderConversation}
+                keyExtractor={(item) => item.partnerId.toString()}
+                style={styles.conversationsList}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              />
+            </ThemedView>
+          ) : (
+            !dmNotifications.length && (
+              <ThemedView style={styles.emptyState}>
+                <ThemedText style={styles.emptyStateText}>No conversations yet</ThemedText>
+              </ThemedView>
+            )
           )}
 
           <ThemedView style={styles.newConversationSection}>
@@ -819,17 +1269,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  testButton: {
-    backgroundColor: '#10b981',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  testButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#f3f4f6',
@@ -852,6 +1292,7 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: 'white',
+    backgroundColor: '#6366f1',
   },
   chatContainer: {
     flex: 1,
@@ -882,6 +1323,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  messageActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  actionButtonText: {
+    fontSize: 11,
+    color: '#6366f1',
+    fontWeight: '600',
+  },
   senderName: {
     fontSize: 14,
     fontWeight: '600',
@@ -896,17 +1353,55 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
   },
+  messageFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   categoryBadge: {
     backgroundColor: '#f3f4f6',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    alignSelf: 'flex-start',
   },
   categoryText: {
     fontSize: 12,
     color: '#666',
     fontWeight: '500',
+  },
+  replyIndicator: {
+    backgroundColor: '#e0e7ff',
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: '#6366f1',
+  },
+  replyIndicatorContent: {
+    flex: 1,
+  },
+  replyIndicatorLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6366f1',
+    marginBottom: 2,
+  },
+  replyIndicatorText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  cancelReplyButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  cancelReplyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ef4444',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -1017,18 +1512,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   usersList: {
-    flexGrow: 0,
+    paddingHorizontal: 0,
   },
   userItem: {
     alignItems: 'center',
     marginRight: 16,
-    width: 70,
+    width: 80,
   },
   userAvatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#10b981',
+    backgroundColor: '#6366f1',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -1042,6 +1537,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#333',
     textAlign: 'center',
+    fontWeight: '500',
   },
   emptyState: {
     flex: 1,
@@ -1055,11 +1551,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   dmHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: '#ffffff',
     padding: 16,
     paddingTop: 50,
-    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1067,12 +1563,15 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   backButton: {
-    marginRight: 16,
+    backgroundColor: '#6366f1',
     padding: 8,
+    borderRadius: 20,
+    marginRight: 16,
   },
   backButtonText: {
-    fontSize: 24,
-    color: '#6366f1',
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   dmHeaderTitle: {
     fontSize: 18,
@@ -1082,15 +1581,19 @@ const styles = StyleSheet.create({
   dmMessagesList: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#f8f9fa',
   },
   dmMessageContainer: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 12,
     marginBottom: 8,
-    maxWidth: '75%',
     alignSelf: 'flex-start',
+    maxWidth: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   ownDmMessage: {
     backgroundColor: '#6366f1',
@@ -1140,4 +1643,90 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-}); 
+  tabWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadge: {
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    marginLeft: 4,
+  },
+  notificationBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  notificationLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  notificationIcon: {
+    backgroundColor: '#6366f1',
+    borderRadius: 12,
+    padding: 4,
+    marginRight: 12,
+  },
+  notificationIconText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  notificationMessage: {
+    fontSize: 14,
+    color: '#666',
+  },
+  notificationRight: {
+    alignItems: 'flex-end',
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 4,
+  },
+  newBadge: {
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    marginLeft: 4,
+  },
+  newBadgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  notificationsSection: {
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  conversationsSection: {
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+});
