@@ -42,9 +42,12 @@ export default function TabLayout() {
           },
         }),
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
-          marginTop: 4,
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 2,
+        },
+        tabBarIconStyle: {
+          marginBottom: 2,
         },
       }}>
       <Tabs.Screen
@@ -52,7 +55,7 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="house.fill" color={color} />
+            <IconSymbol size={focused ? 28 : 25} name="house.fill" color={color} />
           ),
         }}
       />
@@ -61,7 +64,7 @@ export default function TabLayout() {
         options={{
           title: 'Deals Room',
           tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="message.fill" color={color} />
+            <IconSymbol size={focused ? 28 : 25} name="suitcase.fill" color={color} />
           ),
         }}
       />
@@ -70,7 +73,7 @@ export default function TabLayout() {
         options={{
           title: 'More',
           tabBarIcon: ({ color, focused }) => (
-            <IconSymbol size={focused ? 26 : 24} name="square.grid.2x2.fill" color={color} />
+            <IconSymbol size={focused ? 28 : 25} name="line.3.horizontal" color={color} />
           ),
         }}
       />

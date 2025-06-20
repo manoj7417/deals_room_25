@@ -62,6 +62,19 @@ export default function HomeTab() {
     router.replace('/login');
   };
 
+  const handleNavigateToDealsRoom = () => {
+    // Navigate to deals room tab
+    console.log('🚀 Navigating to deals room from home tab...');
+    console.log('🔍 Router object:', router);
+    
+    try {
+      router.push('/deals-room');
+      console.log('✅ Navigation to deals room executed');
+    } catch (error) {
+      console.error('❌ Navigation error:', error);
+    }
+  };
+
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
@@ -75,7 +88,12 @@ export default function HomeTab() {
     return null; // Will redirect in useEffect
   }
 
-  return <HomePage onLogout={handleLogout} />;
+  return (
+    <HomePage 
+      onLogout={handleLogout}
+      onNavigateToDealsRoom={handleNavigateToDealsRoom}
+    />
+  );
 }
 
 const styles = StyleSheet.create({

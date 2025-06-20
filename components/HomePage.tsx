@@ -46,27 +46,7 @@ const ADS_DATA = [
   }
 ];
 
-// Core features data
-const CORE_FEATURES = [
-  {
-    id: 1,
-    title: "Deals Room",
-    subtitle: "Explore business opportunities",
-    icon: "💼",
-    color: "#ff6b6b",
-    onPress: () => Alert.alert("Deals Room", "Coming soon!")
-  },
-  {
-    id: 2,
-    title: "Announcements",
-    subtitle: "Latest updates and news",
-    icon: "📢",
-    color: "#4ecdc4",
-    onPress: () => Alert.alert("Announcements", "Coming soon!")
-  }
-];
-
-// Additional features data
+// Additional features data (moved outside component since it doesn't need props)
 const ADDITIONAL_FEATURES = [
   {
     id: 1,
@@ -102,14 +82,47 @@ const ADDITIONAL_FEATURES = [
   }
 ];
 
+
+
 interface HomePageProps {
   onLogout?: () => void;
+  onNavigateToDealsRoom?: () => void;
 }
 
-export default function HomePage({ onLogout }: HomePageProps) {
+export default function HomePage({ onLogout, onNavigateToDealsRoom }: HomePageProps) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
   const carouselRef = useRef<FlatList>(null);
+
+  // Core features data (inside component to access props)
+  const CORE_FEATURES = [
+    {
+      id: 1,
+      title: "Deals Room",
+      subtitle: "Explore business opportunities",
+      icon: "💼",
+      color: "#ff6b6b",
+      onPress: () => {
+        console.log('🎯 Deals Room card clicked!');
+        console.log('🔍 onNavigateToDealsRoom function:', onNavigateToDealsRoom);
+        
+        if (onNavigateToDealsRoom) {
+          console.log('✅ Calling navigation function...');
+          onNavigateToDealsRoom();
+        } else {
+          console.error('❌ Navigation function not provided!');
+        }
+      }
+    },
+    {
+      id: 2,
+      title: "Announcements",
+      subtitle: "Latest updates and news",
+      icon: "📢",
+      color: "#4ecdc4",
+      onPress: () => Alert.alert("Announcements", "Coming soon!")
+    }
+  ];
 
   useEffect(() => {
     loadCurrentUser();

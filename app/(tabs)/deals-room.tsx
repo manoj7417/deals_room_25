@@ -10,6 +10,7 @@ import {
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   RefreshControl,
   StyleSheet,
@@ -18,6 +19,44 @@ import {
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
+
+interface ResourceCategory {
+  name: string;
+  color: string;
+  icon: string;
+}
+
+interface ResourceCategories {
+  [key: string]: ResourceCategory[];
+}
+
+const RESOURCE_CATEGORIES: ResourceCategories = {
+  'PROJECT & CONSTRUCTION RESOURCES': [
+    { name: 'Land', color: '#64b5f6', icon: '🌍' },
+    { name: 'Machines', color: '#64b5f6', icon: '🚛' },
+    { name: 'Material', color: '#64b5f6', icon: '🏗️' },
+    { name: 'Equipment', color: '#64b5f6', icon: '⚡' },
+    { name: 'Tools', color: '#64b5f6', icon: '🔧' },
+    { name: 'Manpower', color: '#64b5f6', icon: '👥' }
+  ],
+  'BUSINESS RESOURCES': [
+    { name: 'Finance', color: '#64b5f6', icon: '💰' },
+    { name: 'Tenders', color: '#64b5f6', icon: '📋' },
+    { name: 'Showcase', color: '#64b5f6', icon: '🎯' },
+    { name: 'Auction', color: '#64b5f6', icon: '🔨' }
+  ],
+  'STUDENT RESOURCES': [
+    { name: 'Jobs', color: '#64b5f6', icon: '💼' },
+    { name: 'E-Stores', color: '#64b5f6', icon: '🛍️' }
+  ]
+};
+
+// Create display names for better dropdown experience
+const CATEGORY_DISPLAY_NAMES: { [key: string]: string } = {
+  'PROJECT & CONSTRUCTION RESOURCES': 'Project & Construction',
+  'BUSINESS RESOURCES': 'Business Resources',
+  'STUDENT RESOURCES': 'Student Resources'
+};
 
 export default function DealsRoomTab() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -51,6 +90,13 @@ export default function DealsRoomTab() {
   // Notification state
   const [dmNotifications, setDmNotifications] = useState<any[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+
+  // Resource filter state
+  const [selectedResourceCategory, setSelectedResourceCategory] = useState<string>('');
+  const [selectedResourceType, setSelectedResourceType] = useState<string>('');
+  const [showResourceFilter, setShowResourceFilter] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
 
   useEffect(() => {
     checkAuthStatus();
@@ -108,10 +154,6 @@ export default function DealsRoomTab() {
       });
     }
   }, [selectedConversation, currentUser]);
-
-
-
-
 
   const checkAuthStatus = async () => {
     try {
@@ -290,6 +332,23 @@ export default function DealsRoomTab() {
     } catch (error) {
       console.error('❌ Error clearing DM notifications:', error);
     }
+  };
+
+  // Resource filter helper functions
+  const getAvailableResourceTypes = () => {
+    if (!selectedResourceCategory || !RESOURCE_CATEGORIES[selectedResourceCategory]) {
+      return [];
+    }
+    return RESOURCE_CATEGORIES[selectedResourceCategory];
+  };
+
+  const clearResourceFilter = () => {
+    setSelectedResourceCategory('');
+    setSelectedResourceType('');
+  };
+
+  const toggleResourceFilter = () => {
+    setShowResourceFilter(!showResourceFilter);
   };
 
   const setupRealtimeSubscriptions = async () => {
@@ -680,10 +739,24 @@ export default function DealsRoomTab() {
     });
     
     try {
+      // Determine the category to display based on selected resource
+      let displayCategory = 'general';
+      if (selectedResourceType) {
+        displayCategory = selectedResourceType.toLowerCase();
+      } else if (selectedResourceCategory) {
+        // Use a shortened version of the category name
+        const categoryShortNames = {
+          'PROJECT & CONSTRUCTION RESOURCES': 'construction',
+          'BUSINESS RESOURCES': 'business',
+          'STUDENT RESOURCES': 'student'
+        };
+        displayCategory = categoryShortNames[selectedResourceCategory as keyof typeof categoryShortNames] || 'general';
+      }
+
       const messageData = {
         title: `${currentUser.name}: ${newMessage.substring(0, 50)}...`,
         description: newMessage,
-        category: 'general',
+        category: displayCategory,
         status: 'active',
         sender_id: currentUser.id
       };
@@ -1065,6 +1138,184 @@ export default function DealsRoomTab() {
     );
   };
 
+  const renderResourceFilter = () => {
+    if (!showResourceFilter) return null;
+
+    return (
+      <ThemedView style={styles.resourceFilterContainer}>
+        <ThemedView style={styles.resourceFilterHeader}>
+          <ThemedText style={styles.resourceFilterTitle}>Filter by Resources</ThemedText>
+          <TouchableOpacity onPress={toggleResourceFilter} style={styles.closeFilterButton}>
+            <ThemedText style={styles.closeFilterText}>✕</ThemedText>
+          </TouchableOpacity>
+        </ThemedView>
+
+        {/* Resource Category Dropdown */}
+        <ThemedView style={styles.resourceInputContainer}>
+          <ThemedText style={styles.resourceInputLabel}>Resource Category</ThemedText>
+          <ThemedView style={styles.resourcePickerContainer}>
+            <TouchableOpacity
+              style={styles.resourcePicker}
+              onPress={() => {
+                setShowCategoryModal(true);
+              }}
+            >
+              <ThemedText style={styles.resourcePickerText}>
+                {selectedResourceCategory ? CATEGORY_DISPLAY_NAMES[selectedResourceCategory] || selectedResourceCategory : 'Select Category'}
+              </ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
+        </ThemedView>
+
+        {/* Resource Type Dropdown */}
+        <ThemedView style={styles.resourceInputContainer}>
+          <ThemedText style={styles.resourceInputLabel}>Resource Type</ThemedText>
+          <ThemedView style={styles.resourcePickerContainer}>
+            <TouchableOpacity
+              style={styles.resourcePicker}
+              onPress={() => {
+                if (selectedResourceCategory) {
+                  setShowTypeModal(true);
+                }
+              }}
+            >
+              <ThemedText style={styles.resourcePickerText}>
+                {selectedResourceType ? getAvailableResourceTypes().find(t => t.name === selectedResourceType)?.name : 'Select Type'}
+              </ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
+        </ThemedView>
+
+        {/* Filter Actions */}
+        <ThemedView style={styles.resourceFilterActions}>
+          <TouchableOpacity style={styles.clearFilterButton} onPress={clearResourceFilter}>
+            <ThemedText style={styles.clearFilterButtonText}>Clear Filter</ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.applyFilterButton} onPress={toggleResourceFilter}>
+            <ThemedText style={styles.applyFilterButtonText}>Apply Filter</ThemedText>
+          </TouchableOpacity>
+        </ThemedView>
+
+        {/* Show active filters */}
+        {(selectedResourceCategory || selectedResourceType) && (
+          <ThemedView style={styles.activeFiltersContainer}>
+            <ThemedText style={styles.activeFiltersLabel}>Active Filters:</ThemedText>
+            {selectedResourceCategory && (
+              <ThemedView style={styles.activeFilterChip}>
+                <ThemedText style={styles.activeFilterText}>
+                  {CATEGORY_DISPLAY_NAMES[selectedResourceCategory] || selectedResourceCategory}
+                </ThemedText>
+              </ThemedView>
+            )}
+            {selectedResourceType && (
+              <ThemedView style={styles.activeFilterChip}>
+                <ThemedText style={styles.activeFilterText}>
+                  {selectedResourceType}
+                </ThemedText>
+              </ThemedView>
+            )}
+          </ThemedView>
+        )}
+      </ThemedView>
+    );
+  };
+
+  // Category Selection Modal
+  const renderCategoryModal = () => (
+    <Modal visible={showCategoryModal} transparent animationType="slide">
+      <ThemedView style={styles.modalOverlay}>
+        <ThemedView style={styles.modalContent}>
+          <ThemedView style={styles.modalHeader}>
+            <ThemedText style={styles.modalTitle}>Select Category</ThemedText>
+            <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+              <ThemedText style={styles.modalCloseText}>✕</ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
+          
+          <TouchableOpacity 
+            style={styles.modalOption}
+            onPress={() => {
+              setSelectedResourceCategory('');
+              setSelectedResourceType('');
+              setShowCategoryModal(false);
+            }}
+          >
+            <ThemedText style={styles.modalOptionText}>All Categories</ThemedText>
+          </TouchableOpacity>
+          
+          {Object.keys(RESOURCE_CATEGORIES).map((category) => (
+            <TouchableOpacity 
+              key={category}
+              style={[
+                styles.modalOption, 
+                selectedResourceCategory === category && styles.selectedOption
+              ]}
+              onPress={() => {
+                setSelectedResourceCategory(category);
+                setSelectedResourceType(''); // Reset type when category changes
+                setShowCategoryModal(false);
+              }}
+            >
+              <ThemedText style={[
+                styles.modalOptionText,
+                selectedResourceCategory === category && styles.selectedOptionText
+              ]}>
+                {CATEGORY_DISPLAY_NAMES[category] || category}
+              </ThemedText>
+            </TouchableOpacity>
+          ))}
+        </ThemedView>
+      </ThemedView>
+    </Modal>
+  );
+
+  // Type Selection Modal
+  const renderTypeModal = () => (
+    <Modal visible={showTypeModal} transparent animationType="slide">
+      <ThemedView style={styles.modalOverlay}>
+        <ThemedView style={styles.modalContent}>
+          <ThemedView style={styles.modalHeader}>
+            <ThemedText style={styles.modalTitle}>Select Type</ThemedText>
+            <TouchableOpacity onPress={() => setShowTypeModal(false)}>
+              <ThemedText style={styles.modalCloseText}>✕</ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
+          
+          <TouchableOpacity 
+            style={styles.modalOption}
+            onPress={() => {
+              setSelectedResourceType('');
+              setShowTypeModal(false);
+            }}
+          >
+            <ThemedText style={styles.modalOptionText}>All Types</ThemedText>
+          </TouchableOpacity>
+          
+          {getAvailableResourceTypes().map((resource) => (
+            <TouchableOpacity 
+              key={resource.name}
+              style={[
+                styles.modalOption, 
+                selectedResourceType === resource.name && styles.selectedOption
+              ]}
+              onPress={() => {
+                setSelectedResourceType(resource.name);
+                setShowTypeModal(false);
+              }}
+            >
+              <ThemedText style={[
+                styles.modalOptionText,
+                selectedResourceType === resource.name && styles.selectedOptionText
+              ]}>
+                {resource.icon} {resource.name}
+              </ThemedText>
+            </TouchableOpacity>
+          ))}
+        </ThemedView>
+      </ThemedView>
+    </Modal>
+  );
+
   // DM Chat View
   if (selectedConversation && activeTab === 'dm') {
     return (
@@ -1114,6 +1365,12 @@ export default function DealsRoomTab() {
       <ThemedView style={styles.header}>
         <ThemedView style={styles.headerTop}>
           <ThemedText style={styles.headerTitle}>Deals Room</ThemedText>
+          <TouchableOpacity 
+            style={styles.filterButton}
+            onPress={toggleResourceFilter}
+          >
+            <ThemedText style={styles.filterButtonText}>🔍 Filter</ThemedText>
+          </TouchableOpacity>
         </ThemedView>
         <ThemedView style={styles.tabContainer}>
           <TouchableOpacity
@@ -1143,6 +1400,9 @@ export default function DealsRoomTab() {
           </TouchableOpacity>
         </ThemedView>
       </ThemedView>
+
+      {/* Resource Filter */}
+      {renderResourceFilter()}
 
       {activeTab === 'public' ? (
         <KeyboardAvoidingView 
@@ -1174,6 +1434,27 @@ export default function DealsRoomTab() {
               </TouchableOpacity>
             </ThemedView>
           )}
+
+          {/* Resource Type Indicator */}
+          {/* {(selectedResourceCategory || selectedResourceType) && (
+            <ThemedView style={styles.resourceIndicator}>
+              <ThemedText style={styles.resourceIndicatorLabel}>Posting as:</ThemedText>
+              <ThemedView style={styles.resourceIndicatorBadge}>
+                <ThemedText style={styles.resourceIndicatorText}>
+                  {selectedResourceType ? 
+                    `${getAvailableResourceTypes().find(t => t.name === selectedResourceType)?.icon} ${selectedResourceType}` : 
+                    CATEGORY_DISPLAY_NAMES[selectedResourceCategory] || selectedResourceCategory
+                  }
+                </ThemedText>
+              </ThemedView>
+              <TouchableOpacity 
+                style={styles.changeResourceButton}
+                onPress={() => setShowResourceFilter(true)}
+              >
+                <ThemedText style={styles.changeResourceText}>Change</ThemedText>
+              </TouchableOpacity>
+            </ThemedView>
+          )} */}
 
           <ThemedView style={styles.inputContainer}>
             <TextInput
@@ -1238,6 +1519,10 @@ export default function DealsRoomTab() {
           </ThemedView>
         </ThemedView>
       )}
+      
+      {/* Modals */}
+      {renderCategoryModal()}
+      {renderTypeModal()}
     </ThemedView>
   );
 }
@@ -1728,5 +2013,206 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
+  },
+  resourceFilterContainer: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    margin: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  resourceFilterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  resourceFilterTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#333',
+  },
+  closeFilterButton: {
+    padding: 4,
+  },
+  closeFilterText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6366f1',
+  },
+  resourceInputContainer: {
+    marginBottom: 12,
+  },
+  resourceInputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  resourcePickerContainer: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    backgroundColor: 'white',
+  },
+  resourcePicker: {
+    padding: 12,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    minHeight: 50,
+    justifyContent: 'center',
+  },
+  resourcePickerText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  resourceFilterActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 15,
+  },
+  applyFilterButton: {
+    backgroundColor: '#6366f1',
+    padding: 12,
+    borderRadius: 8,
+    flex: 1,
+  },
+  applyFilterButtonText: {
+    color: 'white',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  clearFilterButton: {
+    backgroundColor: '#ef4444',
+    padding: 12,
+    borderRadius: 8,
+    flex: 1,
+  },
+  clearFilterButtonText: {
+    color: 'white',
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  activeFiltersContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  activeFiltersLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    marginRight: 8,
+  },
+  activeFilterChip: {
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  activeFilterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+  },
+  filterButton: {
+    backgroundColor: '#6366f1',
+    padding: 8,
+    borderRadius: 20,
+  },
+  filterButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6366f1',
+  },
+  modalOption: {
+    padding: 12,
+    backgroundColor: 'white',
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  modalOptionText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  selectedOption: {
+    backgroundColor: '#6366f1',
+  },
+  selectedOptionText: {
+    color: 'white',
+  },
+  resourceIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f3f4f6',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  resourceIndicatorLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 8,
+  },
+  resourceIndicatorBadge: {
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flex: 1,
+  },
+  resourceIndicatorText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  changeResourceButton: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  changeResourceText: {
+    color: '#6366f1',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
