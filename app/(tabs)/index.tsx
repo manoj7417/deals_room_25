@@ -78,7 +78,7 @@ export default function HomeTab() {
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color="rgba(99, 102, 241, 1.00)" />
         <ThemedText style={styles.loadingText}>Loading...</ThemedText>
       </ThemedView>
     );

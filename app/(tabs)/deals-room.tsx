@@ -10,12 +10,13 @@ import {
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   TextInput,
-  TouchableOpacity
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -32,22 +33,22 @@ interface ResourceCategories {
 
 const RESOURCE_CATEGORIES: ResourceCategories = {
   'PROJECT & CONSTRUCTION RESOURCES': [
-    { name: 'Land', color: '#64b5f6', icon: '🌍' },
-    { name: 'Machines', color: '#64b5f6', icon: '🚛' },
-    { name: 'Material', color: '#64b5f6', icon: '🏗️' },
-    { name: 'Equipment', color: '#64b5f6', icon: '⚡' },
-    { name: 'Tools', color: '#64b5f6', icon: '🔧' },
-    { name: 'Manpower', color: '#64b5f6', icon: '👥' }
+    { name: 'Land', color: 'rgba(99, 102, 241, 1.00)', icon: '🌍' },
+    { name: 'Machines', color: 'rgba(99, 102, 241, 1.00)', icon: '🚛' },
+    { name: 'Material', color: 'rgba(99, 102, 241, 1.00)', icon: '🏗️' },
+    { name: 'Equipment', color: 'rgba(99, 102, 241, 1.00)', icon: '⚡' },
+    { name: 'Tools', color: 'rgba(99, 102, 241, 1.00)', icon: '🔧' },
+    { name: 'Manpower', color: 'rgba(99, 102, 241, 1.00)', icon: '👥' }
   ],
   'BUSINESS RESOURCES': [
-    { name: 'Finance', color: '#64b5f6', icon: '💰' },
-    { name: 'Tenders', color: '#64b5f6', icon: '📋' },
-    { name: 'Showcase', color: '#64b5f6', icon: '🎯' },
-    { name: 'Auction', color: '#64b5f6', icon: '🔨' }
+    { name: 'Finance', color: 'rgba(99, 102, 241, 1.00)', icon: '💰' },
+    { name: 'Tenders', color: 'rgba(99, 102, 241, 1.00)', icon: '📋' },
+    { name: 'Showcase', color: 'rgba(99, 102, 241, 1.00)', icon: '🎯' },
+    { name: 'Auction', color: 'rgba(99, 102, 241, 1.00)', icon: '🔨' }
   ],
   'STUDENT RESOURCES': [
-    { name: 'Jobs', color: '#64b5f6', icon: '💼' },
-    { name: 'E-Stores', color: '#64b5f6', icon: '🛍️' }
+    { name: 'Jobs', color: 'rgba(99, 102, 241, 1.00)', icon: '💼' },
+    { name: 'E-Stores', color: 'rgba(99, 102, 241, 1.00)', icon: '🛍️' }
   ]
 };
 
@@ -91,12 +92,9 @@ export default function DealsRoomTab() {
   const [dmNotifications, setDmNotifications] = useState<any[]>([]);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
-  // Resource filter state
-  const [selectedResourceCategory, setSelectedResourceCategory] = useState<string>('');
-  const [selectedResourceType, setSelectedResourceType] = useState<string>('');
-  const [showResourceFilter, setShowResourceFilter] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [showTypeModal, setShowTypeModal] = useState(false);
+  // Resource filter state - updated for tabs
+  const [selectedResourceCategory, setSelectedResourceCategory] = useState<string>('BUSINESS RESOURCES');
+  const [selectedResourceType, setSelectedResourceType] = useState<string>('Finance');
 
   useEffect(() => {
     checkAuthStatus();
@@ -342,15 +340,6 @@ export default function DealsRoomTab() {
     return RESOURCE_CATEGORIES[selectedResourceCategory];
   };
 
-  const clearResourceFilter = () => {
-    setSelectedResourceCategory('');
-    setSelectedResourceType('');
-  };
-
-  const toggleResourceFilter = () => {
-    setShowResourceFilter(!showResourceFilter);
-  };
-
   const setupRealtimeSubscriptions = async () => {
     console.log('🚀 Setting up realtime subscriptions...');
     console.log('Current user:', currentUser?.name);
@@ -424,11 +413,12 @@ export default function DealsRoomTab() {
           const newMessage = payload.new;
           console.log('New message:', newMessage);
           
-          // Add user info to the message
+          // Add user info to the message and ensure timestamp
           const senderName = userMap[newMessage.sender_id]?.name || 'Unknown User';
           const messageWithUser = {
             ...newMessage,
-            senderName
+            senderName,
+            created_at: newMessage.created_at || new Date().toISOString()
           };
           
           console.log('Adding message to state...');
@@ -825,7 +815,12 @@ export default function DealsRoomTab() {
       
       // Add message to local state immediately for better UX
       if (data) {
-        setDmMessages(prev => [...prev, data]);
+        // Ensure the message has a created_at timestamp
+        const messageWithTimestamp = {
+          ...data,
+          created_at: data.created_at || new Date().toISOString()
+        };
+        setDmMessages(prev => [...prev, messageWithTimestamp]);
         
         // Scroll to bottom
         setTimeout(() => {
@@ -988,7 +983,10 @@ export default function DealsRoomTab() {
             {senderName}
           </ThemedText>
           <ThemedText style={styles.messageTime}>
-            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {item.created_at ? 
+              new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
+              new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
           </ThemedText>
         </ThemedView>
         <ThemedText style={styles.messageText}>{item.description}</ThemedText>
@@ -1029,7 +1027,10 @@ export default function DealsRoomTab() {
           {item.message}
         </ThemedText>
         <ThemedText style={[styles.dmMessageTime, isOwnMessage && styles.ownDmMessageTime]}>
-          {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {item.created_at ? 
+            new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
+            new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
         </ThemedText>
       </ThemedView>
     );
@@ -1138,184 +1139,6 @@ export default function DealsRoomTab() {
     );
   };
 
-  const renderResourceFilter = () => {
-    if (!showResourceFilter) return null;
-
-    return (
-      <ThemedView style={styles.resourceFilterContainer}>
-        <ThemedView style={styles.resourceFilterHeader}>
-          <ThemedText style={styles.resourceFilterTitle}>Filter by Resources</ThemedText>
-          <TouchableOpacity onPress={toggleResourceFilter} style={styles.closeFilterButton}>
-            <ThemedText style={styles.closeFilterText}>✕</ThemedText>
-          </TouchableOpacity>
-        </ThemedView>
-
-        {/* Resource Category Dropdown */}
-        <ThemedView style={styles.resourceInputContainer}>
-          <ThemedText style={styles.resourceInputLabel}>Resource Category</ThemedText>
-          <ThemedView style={styles.resourcePickerContainer}>
-            <TouchableOpacity
-              style={styles.resourcePicker}
-              onPress={() => {
-                setShowCategoryModal(true);
-              }}
-            >
-              <ThemedText style={styles.resourcePickerText}>
-                {selectedResourceCategory ? CATEGORY_DISPLAY_NAMES[selectedResourceCategory] || selectedResourceCategory : 'Select Category'}
-              </ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-        </ThemedView>
-
-        {/* Resource Type Dropdown */}
-        <ThemedView style={styles.resourceInputContainer}>
-          <ThemedText style={styles.resourceInputLabel}>Resource Type</ThemedText>
-          <ThemedView style={styles.resourcePickerContainer}>
-            <TouchableOpacity
-              style={styles.resourcePicker}
-              onPress={() => {
-                if (selectedResourceCategory) {
-                  setShowTypeModal(true);
-                }
-              }}
-            >
-              <ThemedText style={styles.resourcePickerText}>
-                {selectedResourceType ? getAvailableResourceTypes().find(t => t.name === selectedResourceType)?.name : 'Select Type'}
-              </ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-        </ThemedView>
-
-        {/* Filter Actions */}
-        <ThemedView style={styles.resourceFilterActions}>
-          <TouchableOpacity style={styles.clearFilterButton} onPress={clearResourceFilter}>
-            <ThemedText style={styles.clearFilterButtonText}>Clear Filter</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.applyFilterButton} onPress={toggleResourceFilter}>
-            <ThemedText style={styles.applyFilterButtonText}>Apply Filter</ThemedText>
-          </TouchableOpacity>
-        </ThemedView>
-
-        {/* Show active filters */}
-        {(selectedResourceCategory || selectedResourceType) && (
-          <ThemedView style={styles.activeFiltersContainer}>
-            <ThemedText style={styles.activeFiltersLabel}>Active Filters:</ThemedText>
-            {selectedResourceCategory && (
-              <ThemedView style={styles.activeFilterChip}>
-                <ThemedText style={styles.activeFilterText}>
-                  {CATEGORY_DISPLAY_NAMES[selectedResourceCategory] || selectedResourceCategory}
-                </ThemedText>
-              </ThemedView>
-            )}
-            {selectedResourceType && (
-              <ThemedView style={styles.activeFilterChip}>
-                <ThemedText style={styles.activeFilterText}>
-                  {selectedResourceType}
-                </ThemedText>
-              </ThemedView>
-            )}
-          </ThemedView>
-        )}
-      </ThemedView>
-    );
-  };
-
-  // Category Selection Modal
-  const renderCategoryModal = () => (
-    <Modal visible={showCategoryModal} transparent animationType="slide">
-      <ThemedView style={styles.modalOverlay}>
-        <ThemedView style={styles.modalContent}>
-          <ThemedView style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>Select Category</ThemedText>
-            <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
-              <ThemedText style={styles.modalCloseText}>✕</ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-          
-          <TouchableOpacity 
-            style={styles.modalOption}
-            onPress={() => {
-              setSelectedResourceCategory('');
-              setSelectedResourceType('');
-              setShowCategoryModal(false);
-            }}
-          >
-            <ThemedText style={styles.modalOptionText}>All Categories</ThemedText>
-          </TouchableOpacity>
-          
-          {Object.keys(RESOURCE_CATEGORIES).map((category) => (
-            <TouchableOpacity 
-              key={category}
-              style={[
-                styles.modalOption, 
-                selectedResourceCategory === category && styles.selectedOption
-              ]}
-              onPress={() => {
-                setSelectedResourceCategory(category);
-                setSelectedResourceType(''); // Reset type when category changes
-                setShowCategoryModal(false);
-              }}
-            >
-              <ThemedText style={[
-                styles.modalOptionText,
-                selectedResourceCategory === category && styles.selectedOptionText
-              ]}>
-                {CATEGORY_DISPLAY_NAMES[category] || category}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </ThemedView>
-      </ThemedView>
-    </Modal>
-  );
-
-  // Type Selection Modal
-  const renderTypeModal = () => (
-    <Modal visible={showTypeModal} transparent animationType="slide">
-      <ThemedView style={styles.modalOverlay}>
-        <ThemedView style={styles.modalContent}>
-          <ThemedView style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>Select Type</ThemedText>
-            <TouchableOpacity onPress={() => setShowTypeModal(false)}>
-              <ThemedText style={styles.modalCloseText}>✕</ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-          
-          <TouchableOpacity 
-            style={styles.modalOption}
-            onPress={() => {
-              setSelectedResourceType('');
-              setShowTypeModal(false);
-            }}
-          >
-            <ThemedText style={styles.modalOptionText}>All Types</ThemedText>
-          </TouchableOpacity>
-          
-          {getAvailableResourceTypes().map((resource) => (
-            <TouchableOpacity 
-              key={resource.name}
-              style={[
-                styles.modalOption, 
-                selectedResourceType === resource.name && styles.selectedOption
-              ]}
-              onPress={() => {
-                setSelectedResourceType(resource.name);
-                setShowTypeModal(false);
-              }}
-            >
-              <ThemedText style={[
-                styles.modalOptionText,
-                selectedResourceType === resource.name && styles.selectedOptionText
-              ]}>
-                {resource.icon} {resource.name}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </ThemedView>
-      </ThemedView>
-    </Modal>
-  );
-
   // DM Chat View
   if (selectedConversation && activeTab === 'dm') {
     return (
@@ -1351,9 +1174,9 @@ export default function DealsRoomTab() {
             placeholder="Type a message..."
             multiline
           />
-          <TouchableOpacity style={styles.dmSendButton} onPress={sendDirectMessage}>
-            <ThemedText style={styles.dmSendButtonText}>Send</ThemedText>
-          </TouchableOpacity>
+                      <TouchableOpacity style={styles.dmSendButton} onPress={sendDirectMessage}>
+              <ThemedText style={styles.dmSendButtonText}>Send</ThemedText>
+            </TouchableOpacity>
         </ThemedView>
       </KeyboardAvoidingView>
     );
@@ -1363,46 +1186,110 @@ export default function DealsRoomTab() {
     <ThemedView style={styles.container}>
       {/* Header */}
       <ThemedView style={styles.header}>
-        <ThemedView style={styles.headerTop}>
+        <ThemedView style={styles.headerContainer}>
           <ThemedText style={styles.headerTitle}>Deals Room</ThemedText>
-          <TouchableOpacity 
-            style={styles.filterButton}
-            onPress={toggleResourceFilter}
-          >
-            <ThemedText style={styles.filterButtonText}>🔍 Filter</ThemedText>
-          </TouchableOpacity>
-        </ThemedView>
-        <ThemedView style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'public' && styles.activeTab]}
-            onPress={() => setActiveTab('public')}
-          >
-            <ThemedText style={[styles.tabText, activeTab === 'public' && styles.activeTabText]}>
-              Public Chat
-            </ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'dm' && styles.activeTab]}
-            onPress={() => setActiveTab('dm')}
-          >
-            <ThemedView style={styles.tabWithBadge}>
-              <ThemedText style={[styles.tabText, activeTab === 'dm' && styles.activeTabText]}>
-                Direct Messages
+          <ThemedView style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'public' && styles.activeTab]}
+              onPress={() => setActiveTab('public')}
+            >
+              <ThemedText style={[styles.tabText, activeTab === 'public' && styles.activeTabText]}>
+                Room
               </ThemedText>
-              {unreadNotificationCount > 0 && (
-                <ThemedView style={styles.notificationBadge}>
-                  <ThemedText style={styles.notificationBadgeText}>
-                    {unreadNotificationCount}
-                  </ThemedText>
-                </ThemedView>
-              )}
-            </ThemedView>
-          </TouchableOpacity>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'dm' && styles.activeTab]}
+              onPress={() => setActiveTab('dm')}
+            >
+              <View style={styles.tabWithBadge}>
+                <ThemedText 
+                  style={[styles.tabText, activeTab === 'dm' && styles.activeTabText]}
+                >
+                  DM
+                </ThemedText>
+                {unreadNotificationCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <ThemedText style={styles.notificationBadgeText}>
+                      {unreadNotificationCount}
+                    </ThemedText>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          </ThemedView>
         </ThemedView>
       </ThemedView>
 
-      {/* Resource Filter */}
-      {renderResourceFilter()}
+      {/* Resource Category & Type Tabs */}
+      {activeTab === 'public' && (
+        <ThemedView style={styles.resourceTabsContainer}>
+          {/* Category Tabs */}
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryTabsContainer}
+            contentContainerStyle={styles.categoryTabsContent}
+          >
+            {Object.keys(RESOURCE_CATEGORIES).map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={[
+                  styles.categoryTab,
+                  selectedResourceCategory === category && styles.activeCategoryTab
+                ]}
+                onPress={() => {
+                  setSelectedResourceCategory(category);
+                  setSelectedResourceType(RESOURCE_CATEGORIES[category][0]?.name || '');
+                }}
+              >
+                <ThemedText style={[
+                  styles.categoryTabText,
+                  selectedResourceCategory === category && styles.activeCategoryTabText
+                ]}>
+                  {CATEGORY_DISPLAY_NAMES[category] || category}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Resource Type Tabs */}
+          {selectedResourceCategory && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.resourceTypeTabsContainer}
+              contentContainerStyle={styles.resourceTypeTabsContent}
+            >
+              {RESOURCE_CATEGORIES[selectedResourceCategory]?.map((resource) => (
+                <TouchableOpacity
+                  key={resource.name}
+                  style={[
+                    styles.resourceTypeTab,
+                    selectedResourceType === resource.name && styles.activeResourceTypeTab
+                  ]}
+                  onPress={() => setSelectedResourceType(resource.name)}
+                >
+                  <ThemedText style={[
+                    styles.resourceTypeTabText,
+                    selectedResourceType === resource.name && styles.activeResourceTypeTabText
+                  ]}>
+                    {resource.icon} {resource.name}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Active Selection Indicator */}
+          {selectedResourceCategory && selectedResourceType && (
+            <ThemedView style={styles.activeSelectionIndicator}>
+              <ThemedText style={styles.activeSelectionText}>
+                💬 Chatting as: {RESOURCE_CATEGORIES[selectedResourceCategory]?.find(r => r.name === selectedResourceType)?.icon} {selectedResourceType}
+              </ThemedText>
+            </ThemedView>
+          )}
+        </ThemedView>
+      )}
 
       {activeTab === 'public' ? (
         <KeyboardAvoidingView 
@@ -1434,27 +1321,6 @@ export default function DealsRoomTab() {
               </TouchableOpacity>
             </ThemedView>
           )}
-
-          {/* Resource Type Indicator */}
-          {/* {(selectedResourceCategory || selectedResourceType) && (
-            <ThemedView style={styles.resourceIndicator}>
-              <ThemedText style={styles.resourceIndicatorLabel}>Posting as:</ThemedText>
-              <ThemedView style={styles.resourceIndicatorBadge}>
-                <ThemedText style={styles.resourceIndicatorText}>
-                  {selectedResourceType ? 
-                    `${getAvailableResourceTypes().find(t => t.name === selectedResourceType)?.icon} ${selectedResourceType}` : 
-                    CATEGORY_DISPLAY_NAMES[selectedResourceCategory] || selectedResourceCategory
-                  }
-                </ThemedText>
-              </ThemedView>
-              <TouchableOpacity 
-                style={styles.changeResourceButton}
-                onPress={() => setShowResourceFilter(true)}
-              >
-                <ThemedText style={styles.changeResourceText}>Change</ThemedText>
-              </TouchableOpacity>
-            </ThemedView>
-          )} */}
 
           <ThemedView style={styles.inputContainer}>
             <TextInput
@@ -1519,10 +1385,6 @@ export default function DealsRoomTab() {
           </ThemedView>
         </ThemedView>
       )}
-      
-      {/* Modals */}
-      {renderCategoryModal()}
-      {renderTypeModal()}
     </ThemedView>
   );
 }
@@ -1543,41 +1405,42 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  headerTop: {
+  headerContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
   },
-
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#e5e7eb',
     borderRadius: 8,
-    padding: 4,
+    padding: 3,
   },
   tab: {
-    flex: 1,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 6,
+    marginHorizontal: 2,
+    backgroundColor: 'transparent',
   },
   activeTab: {
-    backgroundColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
   },
   tabText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
+    fontWeight: '600',
+    color: '#6b7280',
+    backgroundColor: 'transparent',
   },
   activeTabText: {
-    color: 'white',
-    backgroundColor: '#6366f1',
+    color: '#ffffff',
+    backgroundColor: 'transparent',
   },
   chatContainer: {
     flex: 1,
@@ -1598,9 +1461,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   ownMessage: {
-    backgroundColor: '#e0e7ff',
+    backgroundColor: '#ffffff',
     alignSelf: 'flex-end',
-    maxWidth: '80%',
+    maxWidth: '90%',
   },
   messageHeader: {
     flexDirection: 'row',
@@ -1614,20 +1477,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionButton: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: 'transparent',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
   },
   actionButtonText: {
     fontSize: 11,
-    color: '#6366f1',
+    color: 'rgba(99, 102, 241, 1.00)',
     fontWeight: '600',
   },
   senderName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6366f1',
+    color: 'rgba(99, 102, 241, 1.00)',
   },
   messageTime: {
     fontSize: 12,
@@ -1644,18 +1509,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   categoryBadge: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: 'transparent',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   categoryText: {
     fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    color: 'rgba(99, 102, 241, 1.00)',
+    fontWeight: '600',
   },
   replyIndicator: {
-    backgroundColor: '#e0e7ff',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
     padding: 12,
     marginHorizontal: 16,
     marginBottom: 8,
@@ -1664,7 +1529,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderLeftWidth: 3,
-    borderLeftColor: '#6366f1',
+    borderLeftColor: 'rgba(99, 102, 241, 1.00)',
   },
   replyIndicatorContent: {
     flex: 1,
@@ -1672,7 +1537,7 @@ const styles = StyleSheet.create({
   replyIndicatorLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6366f1',
+    color: 'rgba(99, 102, 241, 1.00)',
     marginBottom: 2,
   },
   replyIndicatorText: {
@@ -1686,7 +1551,7 @@ const styles = StyleSheet.create({
   cancelReplyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#ef4444',
+    color: 'rgba(99, 102, 241, 1.00)',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -1698,18 +1563,18 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    borderRadius: 20,
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    maxHeight: 100,
-    fontSize: 16,
+    maxHeight: 50,
+    fontSize: 14,
     marginRight: 12,
   },
   sendButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 20,
+    borderRadius: 10,
   },
   sendButtonText: {
     color: 'white',
@@ -1740,7 +1605,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1772,7 +1637,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   unreadBadge: {
-    backgroundColor: '#ef4444',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1808,7 +1673,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -1848,14 +1713,18 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   backButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     padding: 8,
-    borderRadius: 20,
+    borderRadius: 10,
     marginRight: 16,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   backButtonText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   dmHeaderTitle: {
@@ -1873,7 +1742,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
     alignSelf: 'flex-start',
-    maxWidth: '80%',
+    maxWidth: '90%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -1881,7 +1750,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   ownDmMessage: {
-    backgroundColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     alignSelf: 'flex-end',
   },
   dmMessageText: {
@@ -1910,18 +1779,18 @@ const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: '#e0e0e0',
-    borderRadius: 20,
+    borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    maxHeight: 100,
-    fontSize: 16,
+    maxHeight: 50,
+    fontSize: 14,
     marginRight: 12,
   },
   dmSendButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 20,
+    borderRadius: 10,
   },
   dmSendButtonText: {
     color: 'white',
@@ -1932,16 +1801,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
   notificationBadge: {
-    backgroundColor: '#ef4444',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     borderRadius: 10,
     paddingHorizontal: 4,
     paddingVertical: 2,
     marginLeft: 4,
+    overflow: 'hidden',
   },
   notificationBadgeText: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -1959,7 +1830,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   notificationIcon: {
-    backgroundColor: '#6366f1',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     borderRadius: 12,
     padding: 4,
     marginRight: 12,
@@ -1991,7 +1862,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   newBadge: {
-    backgroundColor: '#ef4444',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     borderRadius: 10,
     paddingHorizontal: 4,
     paddingVertical: 2,
@@ -2014,205 +1885,83 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#f3f4f6',
   },
-  resourceFilterContainer: {
+
+  // Resource Tabs Styles
+  resourceTabsContainer: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+    paddingBottom: 8,
+  },
+  categoryTabsContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  categoryTabsContent: {
+    paddingRight: 16,
+  },
+  categoryTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
     backgroundColor: '#f8f9fa',
-    padding: 16,
-    margin: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  resourceFilterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  resourceFilterTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#333',
-  },
-  closeFilterButton: {
-    padding: 4,
-  },
-  closeFilterText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6366f1',
-  },
-  resourceInputContainer: {
-    marginBottom: 12,
-  },
-  resourceInputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#333',
-  },
-  resourcePickerContainer: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    backgroundColor: 'white',
-  },
-  resourcePicker: {
-    padding: 12,
-    backgroundColor: 'white',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    minHeight: 50,
-    justifyContent: 'center',
-  },
-  resourcePickerText: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '600',
-  },
-  resourceFilterActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 15,
-  },
-  applyFilterButton: {
-    backgroundColor: '#6366f1',
-    padding: 12,
-    borderRadius: 8,
-    flex: 1,
-  },
-  applyFilterButtonText: {
-    color: 'white',
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  clearFilterButton: {
-    backgroundColor: '#ef4444',
-    padding: 12,
-    borderRadius: 8,
-    flex: 1,
-  },
-  clearFilterButtonText: {
-    color: 'white',
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  activeFiltersContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  activeFiltersLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
-    marginRight: 8,
-  },
-  activeFilterChip: {
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  activeFilterText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
-  },
-  filterButton: {
-    backgroundColor: '#6366f1',
-    padding: 8,
-    borderRadius: 20,
-  },
-  filterButtonText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    width: '80%',
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalCloseText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6366f1',
-  },
-  modalOption: {
-    padding: 12,
-    backgroundColor: 'white',
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-  modalOptionText: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '600',
-  },
-  selectedOption: {
-    backgroundColor: '#6366f1',
-  },
-  selectedOptionText: {
-    color: 'white',
-  },
-  resourceIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#f3f4f6',
-    marginHorizontal: 16,
-    marginBottom: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  resourceIndicatorLabel: {
+  activeCategoryTab: {
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
+    borderColor: 'rgba(99, 102, 241, 1.00)',
+  },
+  categoryTabText: {
     fontSize: 14,
+    fontWeight: '600',
     color: '#666',
-    marginRight: 8,
   },
-  resourceIndicatorBadge: {
-    backgroundColor: '#6366f1',
+  activeCategoryTabText: {
+    color: '#ffffff',
+  },
+  resourceTypeTabsContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  resourceTypeTabsContent: {
+    paddingRight: 16,
+  },
+  resourceTypeTab: {
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    flex: 1,
+    paddingVertical: 6,
+    marginRight: 6,
+    backgroundColor: 'transparent',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
   },
-  resourceIndicatorText: {
-    color: 'white',
+  activeResourceTypeTab: {
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
+    borderColor: 'rgba(99, 102, 241, 1.00)',
+  },
+  resourceTypeTabText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#666',
+  },
+  activeResourceTypeTabText: {
+    color: '#ffffff',
+  },
+  activeSelectionIndicator: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: 'rgba(99, 102, 241, 1.00)',
+  },
+  activeSelectionText: {
     fontSize: 12,
     fontWeight: '600',
-    textAlign: 'center',
-  },
-  changeResourceButton: {
-    marginLeft: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  changeResourceText: {
-    color: '#6366f1',
-    fontSize: 12,
-    fontWeight: '600',
+    color: 'rgba(99, 102, 241, 1.00)',
   },
 });

@@ -13,8 +13,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#6366f1', // Purple color for active tabs (matching the screenshot)
-        tabBarInactiveTintColor: '#9ca3af',
+        tabBarActiveTintColor: 'rgba(99, 102, 241, 1.00)', // Indigo color for active tabs
+        tabBarInactiveTintColor: 'rgba(99, 102, 241, 0.3)', // Light indigo for inactive tabs
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
@@ -27,6 +27,9 @@ export default function TabLayout() {
             shadowOffset: { width: 0, height: -2 },
             shadowOpacity: 0.1,
             shadowRadius: 8,
+            height: 80,
+            paddingBottom: 20,
+            paddingTop: 10,
           },
           default: {
             backgroundColor: '#ffffff',
@@ -42,12 +45,17 @@ export default function TabLayout() {
           },
         }),
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: '600',
-          marginTop: 2,
+          marginTop: 4,
+          color: 'rgba(99, 102, 241, 0.8)', // Ensure text visibility
         },
         tabBarIconStyle: {
           marginBottom: 2,
+        },
+        headerTintColor: 'rgba(99, 102, 241, 1.00)', // Indigo color for header text
+        headerStyle: {
+          backgroundColor: '#ffffff', // White background
         },
       }}>
       <Tabs.Screen

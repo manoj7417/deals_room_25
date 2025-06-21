@@ -2,13 +2,13 @@ import type { InsertUser } from '@/lib';
 import { auth, users } from '@/lib';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Modal,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Modal,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity
 } from 'react-native';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
@@ -27,22 +27,22 @@ interface ResourceCategories {
 
 const RESOURCE_CATEGORIES: ResourceCategories = {
   'PROJECT & CONSTRUCTION RESOURCES': [
-    { name: 'Land', color: '#64b5f6', icon: '🌍' },
-    { name: 'Machines', color: '#64b5f6', icon: '🚛' },
-    { name: 'Material', color: '#64b5f6', icon: '🏗️' },
-    { name: 'Equipment', color: '#64b5f6', icon: '⚡' },
-    { name: 'Tools', color: '#64b5f6', icon: '🔧' },
-    { name: 'Manpower', color: '#64b5f6', icon: '👥' }
+    { name: 'Land', color: 'rgba(99, 102, 241, 1.00)', icon: '🌍' },
+    { name: 'Machines', color: 'rgba(99, 102, 241, 1.00)', icon: '🚛' },
+    { name: 'Material', color: 'rgba(99, 102, 241, 1.00)', icon: '🏗️' },
+    { name: 'Equipment', color: 'rgba(99, 102, 241, 1.00)', icon: '⚡' },
+    { name: 'Tools', color: 'rgba(99, 102, 241, 1.00)', icon: '🔧' },
+    { name: 'Manpower', color: 'rgba(99, 102, 241, 1.00)', icon: '👥' }
   ],
   'BUSINESS RESOURCES': [
-    { name: 'Finance', color: '#64b5f6', icon: '💰' },
-    { name: 'Tenders', color: '#64b5f6', icon: '📋' },
-    { name: 'Showcase', color: '#64b5f6', icon: '🎯' },
-    { name: 'Auction', color: '#64b5f6', icon: '🔨' }
+    { name: 'Finance', color: 'rgba(99, 102, 241, 1.00)', icon: '💰' },
+    { name: 'Tenders', color: 'rgba(99, 102, 241, 1.00)', icon: '📋' },
+    { name: 'Showcase', color: 'rgba(99, 102, 241, 1.00)', icon: '🎯' },
+    { name: 'Auction', color: 'rgba(99, 102, 241, 1.00)', icon: '🔨' }
   ],
   'STUDENT RESOURCES': [
-    { name: 'Jobs', color: '#64b5f6', icon: '💼' },
-    { name: 'E-Stores', color: '#64b5f6', icon: '🛍️' }
+    { name: 'Jobs', color: 'rgba(99, 102, 241, 1.00)', icon: '💼' },
+    { name: 'E-Stores', color: 'rgba(99, 102, 241, 1.00)', icon: '🛍️' }
   ]
 };
 

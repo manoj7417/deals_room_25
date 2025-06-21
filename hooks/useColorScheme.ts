@@ -1,1 +1,4 @@
-export { useColorScheme } from 'react-native';
+// Always return 'light' to force light theme regardless of system setting
+export function useColorScheme() {
+  return 'light' as const;
+}

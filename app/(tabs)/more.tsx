@@ -5,11 +5,11 @@ import { auth, users } from '@/lib';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    TouchableOpacity,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 
 const MORE_OPTIONS = [
@@ -218,12 +218,12 @@ export default function MoreTab() {
           <ThemedText style={styles.headerTitle}>More</ThemedText>
           <ThemedText style={styles.headerSubtitle}>Settings and tools</ThemedText>
         </ThemedView>
-        <TouchableOpacity
+        {/* <TouchableOpacity
           onPress={() => setShowRealtimeTest(true)}
           style={styles.debugButton}
         >
           <ThemedText style={styles.debugButtonText}>🧪 RT Test</ThemedText>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </ThemedView>
 
       <ScrollView
@@ -254,7 +254,7 @@ export default function MoreTab() {
         {/* Logout Button */}
         <ThemedView style={styles.logoutSection}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <ThemedText style={styles.logoutButtonText}>Logout</ThemedText>
+            <ThemedText style={styles.logoutText}>Logout</ThemedText>
           </TouchableOpacity>
         </ThemedView>
 
@@ -415,10 +415,12 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   logoutButton: {
-    backgroundColor: '#ef4444',
+    // backgroundColor: '#ef4444',
+    backgroundColor : 'rgba(99, 102, 241, 1.00)',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
+    color : 'white',
   },
   logoutText: {
     color: 'white',
