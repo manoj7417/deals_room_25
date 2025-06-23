@@ -97,14 +97,9 @@ export default function LoginScreen({ onLoginSuccess, onNavigateToRegister }: Lo
 
   return (
     <ThemedView style={styles.container}>
-      {/* Header */}
-      <ThemedView style={styles.headerContainer}>
-        <ThemedText style={styles.loginTitle}>Login</ThemedText>
-        <ThemedText style={styles.logoText}>🏗️ UPC</ThemedText>
-      </ThemedView>
-
       {/* Welcome Message */}
       <ThemedView style={styles.welcomeContainer}>
+        <ThemedText style={styles.logoText}>🏗️ UPC</ThemedText>
         <ThemedText style={styles.welcomeTitle}>Welcome Back!</ThemedText>
         <ThemedText style={styles.welcomeSubtitle}>
           Please sign in to your account
@@ -177,33 +172,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
     padding: 20,
-  },
-  headerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 40,
-    marginTop: 20,
-  },
-  loginTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#dc3545',
+    justifyContent: 'center',
   },
   logoText: {
-    fontSize: 18,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: 'rgba(99, 102, 241, 1.00)',
+    textAlign: 'center',
+    marginBottom: 20,
   },
   welcomeContainer: {
-    marginBottom: 40,
+    marginBottom: 50,
     alignItems: 'center',
   },
   welcomeTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 8,
+    textAlign: 'center',
   },
   welcomeSubtitle: {
     fontSize: 16,
@@ -237,12 +224,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   forgotPasswordText: {
-    color: '#dc3545',
+    color: 'rgba(99, 102, 241, 1.00)',
     fontSize: 14,
     fontWeight: '500',
   },
   loginButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -264,7 +251,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   registerLink: {
-    color: '#dc3545',
+    color: 'rgba(99, 102, 241, 1.00)',
     fontWeight: '500',
   },
 }); 

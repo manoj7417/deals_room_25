@@ -1,14 +1,21 @@
 import type { InsertUser } from '@/lib';
 import { auth, users } from '@/lib';
+import { Image } from 'expo-image';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Modal,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
@@ -62,6 +69,15 @@ export default function RegistrationScreen({ onComplete, onNavigateToLogin }: Re
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
+  // Toast state
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{
+    type: 'success' | 'error' | 'info';
+    title: string;
+    message: string;
+  } | null>(null);
+  const toastOpacity = useState(new Animated.Value(0))[0];
+
   // Step 1 - Basic Info
   const [formData, setFormData] = useState({
     fullName: '',
@@ -78,31 +94,82 @@ export default function RegistrationScreen({ onComplete, onNavigateToLogin }: Re
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showPrimaryResourceModal, setShowPrimaryResourceModal] = useState(false);
 
-  const validateStep1 = () => {
+  // Custom toast function
+  const showToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
+    setToastMessage({ type, title, message });
+    setToastVisible(true);
+    
+    Animated.timing(toastOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    // Auto hide after 4 seconds
+    setTimeout(() => {
+      hideToast();
+    }, 4000);
+  };
+
+  const hideToast = () => {
+    Animated.timing(toastOpacity, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setToastVisible(false);
+      setToastMessage(null);
+    });
+  };
+
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    try {
+      const { data } = await users.getByEmail(email.trim().toLowerCase());
+      return !!data; // Returns true if user exists
+    } catch (error) {
+      console.error('Error checking email:', error);
+      return false; // Assume email doesn't exist if there's an error
+    }
+  };
+
+  const validateStep1 = async (): Promise<boolean> => {
     if (!formData.fullName.trim()) {
-      Alert.alert('Error', 'Please enter your full name');
+      showToast('error', 'Missing Information', 'Please enter your full name');
       return false;
     }
     if (!formData.email.trim()) {
-      Alert.alert('Error', 'Please enter your email');
+      showToast('error', 'Missing Information', 'Please enter your email address');
       return false;
     }
     if (!formData.password) {
-      Alert.alert('Error', 'Please enter a password');
+      showToast('error', 'Missing Information', 'Please enter a password');
       return false;
     }
     if (formData.password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showToast('error', 'Invalid Password', 'Password must be at least 6 characters');
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showToast('error', 'Password Mismatch', 'Passwords do not match');
       return false;
     }
     
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      showToast('error', 'Invalid Email', 'Please enter a valid email address');
+      return false;
+    }
+    
+    // Check if email already exists
+    try {
+      const emailExists = await checkEmailExists(formData.email);
+      if (emailExists) {
+        showToast('error', 'Email Already Registered', `${formData.email} is already registered. Please use a different email or login.`);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error checking email:', error);
+      showToast('error', 'Connection Error', 'Unable to verify email. Please check your connection.');
       return false;
     }
     
@@ -121,9 +188,12 @@ export default function RegistrationScreen({ onComplete, onNavigateToLogin }: Re
     return true;
   };
 
-  const handleNextStep = () => {
-    if (currentStep === 1 && validateStep1()) {
-      setCurrentStep(2);
+  const handleNextStep = async () => {
+    if (currentStep === 1) {
+      const isValid = await validateStep1();
+      if (isValid) {
+        setCurrentStep(2);
+      }
     }
   };
 
@@ -154,6 +224,16 @@ export default function RegistrationScreen({ onComplete, onNavigateToLogin }: Re
     console.log('🚀 Starting registration process...');
     
     try {
+      // Double-check email doesn't exist right before registration
+      console.log('🔍 Final email check before registration...');
+      const emailExists = await checkEmailExists(formData.email);
+      if (emailExists) {
+        setLoading(false);
+        showToast('error', 'Email Already Registered', `${formData.email} is already registered. Please use a different email.`);
+        setCurrentStep(1); // Go back to step 1 to change email
+        return;
+      }
+
       // Step 1: Create auth user (bypass email confirmation)
       console.log('📧 Creating auth user for:', formData.email.trim().toLowerCase());
       const { data: authData, error: authError } = await auth.signUpDirect(
@@ -165,15 +245,24 @@ export default function RegistrationScreen({ onComplete, onNavigateToLogin }: Re
 
       if (authError) {
         console.error('❌ Auth error:', authError);
-        Alert.alert('Registration Error', authError.message);
         setLoading(false);
+        
+        // Handle specific case of email already exists
+        if (authError.message === 'User already exists') {
+          showToast('error', 'Email Already Registered', `${formData.email} is already registered. Please use a different email.`);
+          setCurrentStep(1); // Go back to step 1 to change email
+          return;
+        }
+        
+        // Handle other auth errors
+        showToast('error', 'Registration Failed', authError.message || 'Failed to create account. Please try again.');
         return;
       }
 
       if (!authData?.user) {
         console.error('❌ No user data returned from auth');
-        Alert.alert('Registration Error', 'Failed to create user account');
         setLoading(false);
+        showToast('error', 'Registration Failed', 'Failed to create user account. Please try again.');
         return;
       }
 
@@ -194,118 +283,136 @@ export default function RegistrationScreen({ onComplete, onNavigateToLogin }: Re
 
       if (userError) {
         console.error('❌ User creation error:', userError);
-        Alert.alert('Registration Error', 'Failed to create user profile: ' + userError.message);
         setLoading(false);
+        
+        // Handle database constraint errors (e.g., unique email constraint)
+        if (userError.message?.includes('duplicate key value') || 
+            userError.message?.includes('already exists') ||
+            userError.code === '23505') {
+          showToast('error', 'Email Already Registered', `${formData.email} is already registered. Please use a different email.`);
+          setCurrentStep(1); // Go back to step 1 to change email
+          return;
+        }
+        
+        showToast('error', 'Registration Failed', 'Failed to create user profile. Please try again.');
         return;
       }
 
       console.log('✅ User record created successfully');
-      console.log('🎉 Registration completed, showing success alert...');
+      console.log('🎉 Registration completed successfully');
 
-      // Immediately call the callback without waiting for alert
       setLoading(false);
       
-      Alert.alert(
-        'Registration Successful!',
-        `Welcome ${formData.fullName}! Your account has been created successfully. Please login to continue.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              console.log('🔄 User clicked OK, calling onComplete callback...');
-              onComplete?.();
-            },
-          },
-        ]
-      );
+      // Show success toast
+      showToast('success', 'Registration Successful!', `Welcome ${formData.fullName}! Please login to continue.`);
 
-      // Also call the callback immediately in case the alert has issues
+      // Navigate after a short delay to let user see the success message
       setTimeout(() => {
-        console.log('🔄 Backup redirect - calling onComplete callback...');
+        console.log('🔄 Navigating to login...');
         onComplete?.();
-      }, 100);
+      }, 1500);
 
     } catch (error) {
       console.error('💥 Registration error:', error);
-      Alert.alert('Registration Error', 'An unexpected error occurred. Please try again.');
       setLoading(false);
+      showToast('error', 'Registration Failed', 'An unexpected error occurred. Please try again.');
     }
   };
 
   const renderStep1 = () => (
-    <ThemedView style={styles.stepContainer}>
-      <ThemedText type="title" style={styles.stepTitle}>
-        Create Your Account
-      </ThemedText>
-      <ThemedText style={styles.stepSubtitle}>
-        Enter your basic information to get started
-      </ThemedText>
+    <ScrollView 
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContentContainer}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <ThemedView style={styles.stepContent}>
+        <Image 
+          source={require('@/assets/images/upcr-logo.png')} 
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
+        <ThemedText type="title" style={styles.stepTitle}>
+          Create Your Account
+        </ThemedText>
+        <ThemedText style={styles.stepSubtitle}>
+          Enter your basic information to get started
+        </ThemedText>
 
-      <ThemedView style={styles.formContainer}>
-        <ThemedView style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Full Name</ThemedText>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Enter your full name"
-            value={formData.fullName}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
-            autoCapitalize="words"
-          />
+        <ThemedView style={styles.formContainer}>
+          <ThemedView style={styles.inputContainer}>
+            <ThemedText style={styles.inputLabel}>Full Name</ThemedText>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Enter your full name"
+              value={formData.fullName}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, fullName: text }))}
+              autoCapitalize="words"
+            />
+          </ThemedView>
+
+          <ThemedView style={styles.inputContainer}>
+            <ThemedText style={styles.inputLabel}>Email Address</ThemedText>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Enter your email"
+              value={formData.email}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </ThemedView>
+
+          <ThemedView style={styles.inputContainer}>
+            <ThemedText style={styles.inputLabel}>Password</ThemedText>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Create a password (min 6 characters)"
+              value={formData.password}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </ThemedView>
+
+          <ThemedView style={styles.inputContainer}>
+            <ThemedText style={styles.inputLabel}>Confirm Password</ThemedText>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Confirm your password"
+              value={formData.confirmPassword}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, confirmPassword: text }))}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </ThemedView>
         </ThemedView>
 
-        <ThemedView style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Email Address</ThemedText>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Enter your email"
-            value={formData.email}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-        </ThemedView>
-
-        <ThemedView style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Password</ThemedText>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Create a password (min 6 characters)"
-            value={formData.password}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
-            secureTextEntry
-            autoCapitalize="none"
-          />
-        </ThemedView>
-
-        <ThemedView style={styles.inputContainer}>
-          <ThemedText style={styles.inputLabel}>Confirm Password</ThemedText>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Confirm your password"
-            value={formData.confirmPassword}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, confirmPassword: text }))}
-            secureTextEntry
-            autoCapitalize="none"
-          />
-        </ThemedView>
+        <TouchableOpacity style={styles.nextButton} onPress={handleNextStep}>
+          <ThemedText style={styles.buttonText}>Next Step →</ThemedText>
+        </TouchableOpacity>
       </ThemedView>
-
-      <TouchableOpacity style={styles.nextButton} onPress={handleNextStep}>
-        <ThemedText style={styles.buttonText}>Next Step →</ThemedText>
-      </TouchableOpacity>
-    </ThemedView>
+    </ScrollView>
   );
 
   const renderStep2 = () => (
-    <ThemedView style={styles.stepContainer}>
-      {/* Header */}
-      <ThemedView style={styles.headerContainer}>
-        <ThemedText style={styles.signUpTitle}>Sign Up</ThemedText>
-        <ThemedText style={styles.logoText}>🏗️ UPC</ThemedText>
-      </ThemedView>
+    <ScrollView 
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContentContainer}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <ThemedView style={styles.stepContent}>
+        <Image 
+          source={require('@/assets/images/upcr-logo.png')} 
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
+        <ThemedText style={styles.stepTitle}>Complete Registration</ThemedText>
+        <ThemedText style={styles.stepSubtitle}>Step 2 of 2: Select your resources</ThemedText>
 
-      <ThemedView style={styles.formContainer}>
+        <ThemedView style={styles.formContainer}>
         {/* Resource Category Dropdown */}
         <ThemedView style={styles.inputContainer}>
           <ThemedText style={styles.inputLabel}>Select Resource Category</ThemedText>
@@ -374,7 +481,8 @@ export default function RegistrationScreen({ onComplete, onNavigateToLogin }: Re
           </ThemedText>
         </TouchableOpacity>
       </ThemedView>
-    </ThemedView>
+      </ThemedView>
+    </ScrollView>
   );
 
   // Category Selection Modal
@@ -456,23 +564,42 @@ export default function RegistrationScreen({ onComplete, onNavigateToLogin }: Re
   );
 
   return (
-    <ThemedView style={styles.container}>
-      {/* Progress Indicator - only show for step 1 */}
-      {currentStep === 1 && (
-        <ThemedView style={styles.progressContainer}>
-          <ThemedView style={styles.progressBar}>
-            <ThemedView style={[styles.progressFill, { width: `${(currentStep / 2) * 100}%` }]} />
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ThemedView style={styles.contentContainer}>
+        {/* Progress Indicator - only show for step 1 */}
+        {currentStep === 1 && (
+          <ThemedView style={styles.progressContainer}>
+            <ThemedView style={styles.progressBar}>
+              <ThemedView style={[styles.progressFill, { width: `${(currentStep / 2) * 100}%` }]} />
+            </ThemedView>
+            <ThemedText style={styles.progressText}>Step {currentStep} of 2</ThemedText>
           </ThemedView>
-          <ThemedText style={styles.progressText}>Step {currentStep} of 2</ThemedText>
-        </ThemedView>
-      )}
+        )}
 
-      {currentStep === 1 ? renderStep1() : renderStep2()}
+        {currentStep === 1 ? renderStep1() : renderStep2()}
+        
+        {/* Modals */}
+        {renderCategoryModal()}
+        {renderPrimaryResourceModal()}
+      </ThemedView>
       
-      {/* Modals */}
-      {renderCategoryModal()}
-      {renderPrimaryResourceModal()}
-    </ThemedView>
+      {/* Toast Messages */}
+      {toastVisible && (
+        <Animated.View style={[styles.toastContainer, { opacity: toastOpacity }]}>
+          <View style={[
+            styles.toastContent,
+            toastMessage?.type === 'error' && styles.toastError,
+            toastMessage?.type === 'success' && styles.toastSuccess
+          ]}>
+            <Text style={styles.toastTitle}>{toastMessage?.title}</Text>
+            <Text style={styles.toastMessage}>{toastMessage?.message}</Text>
+          </View>
+        </Animated.View>
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
@@ -480,6 +607,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  contentContainer: {
+    flex: 1,
   },
   progressContainer: {
     padding: 20,
@@ -493,7 +623,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#dc3545',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     borderRadius: 2,
   },
   progressText: {
@@ -504,6 +634,16 @@ const styles = StyleSheet.create({
   stepContainer: {
     flex: 1,
     padding: 20,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    flexGrow: 1,
+    padding: 20,
+  },
+  stepContent: {
+    flex: 1,
   },
   headerContainer: {
     flexDirection: 'row',
@@ -516,10 +656,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#dc3545',
   },
-  logoText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+  logoImage: {
+    width: 120,
+    height: 80,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   stepTitle: {
     textAlign: 'center',
@@ -590,7 +731,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   nextButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -621,7 +762,7 @@ const styles = StyleSheet.create({
   },
   createButton: {
     flex: 1,
-    backgroundColor: '#dc3545',
+    backgroundColor: 'rgba(99, 102, 241, 1.00)',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -642,7 +783,7 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   loginLink: {
-    color: '#dc3545',
+    color: 'rgba(99, 102, 241, 1.00)',
     fontWeight: '500',
   },
   customPickerButton: {
@@ -706,10 +847,10 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   selectedModalOption: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
   },
   selectedModalOptionText: {
-    color: '#1976d2',
+    color: 'rgba(99, 102, 241, 1.00)',
     fontWeight: '600',
   },
   modalCloseButton: {
@@ -723,5 +864,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     fontWeight: '500',
+  },
+  toastContainer: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
+    elevation: 1000,
+  },
+  toastContent: {
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6366f1',
+  },
+  toastTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    color: '#333',
+  },
+  toastMessage: {
+    fontSize: 14,
+    color: '#666',
+  },
+  toastError: {
+    borderLeftColor: '#ef4444',
+    backgroundColor: '#fef2f2',
+  },
+  toastSuccess: {
+    borderLeftColor: '#22c55e',
+    backgroundColor: '#f0fdf4',
   },
 }); 

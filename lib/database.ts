@@ -48,33 +48,42 @@ export const auth = {
   // Direct signup that bypasses Supabase auth completely
   signUpDirect: async (email: string, password: string) => {
     try {
-      // Check if user already exists
-      const { data: existingUser } = await supabase
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Use a more robust check with error handling
+      const { data: existingUser, error: checkError } = await supabase
         .from('users')
         .select('email')
-        .eq('email', email.toLowerCase())
-        .single()
+        .eq('email', normalizedEmail)
+        .maybeSingle(); // Use maybeSingle instead of single to avoid errors when no record found
+      
+      if (checkError) {
+        console.error('Error checking existing user:', checkError);
+        return { data: null, error: { message: 'Failed to verify email availability' } };
+      }
       
       if (existingUser) {
-        return { data: null, error: { message: 'User already exists' } }
+        console.log('User already exists with email:', normalizedEmail);
+        return { data: null, error: { message: 'User already exists' } };
       }
       
       // Create a mock user ID and return success
-      const mockUserId = Date.now().toString()
+      const mockUserId = Date.now().toString();
       
       return { 
         data: {
           user: {
             id: mockUserId,
-            email: email.toLowerCase(),
+            email: normalizedEmail,
             email_confirmed_at: new Date().toISOString()
           },
           session: null
         }, 
         error: null
-      }
+      };
     } catch (err) {
-      return { data: null, error: err as any }
+      console.error('SignUpDirect error:', err);
+      return { data: null, error: { message: 'Registration failed. Please try again.' } };
     }
   },
 
