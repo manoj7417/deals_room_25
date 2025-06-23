@@ -8,9 +8,20 @@
     "scheme": "dealsroom25",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/upcr-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dealsroom.app"
+      "bundleIdentifier": "com.dealsroom.app",
+      "splash": {
+        "image": "./assets/images/upcr-logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff",
+        "tabletImage": "./assets/images/upcr-logo.png"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,19 +34,34 @@
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE"
-      ]
+      ],
+      "splash": {
+        "image": "./assets/images/upcr-logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff",
+        "mdpi": "./assets/images/upcr-logo.png",
+        "hdpi": "./assets/images/upcr-logo.png",
+        "xhdpi": "./assets/images/upcr-logo.png",
+        "xxhdpi": "./assets/images/upcr-logo.png",
+        "xxxhdpi": "./assets/images/upcr-logo.png"
+      }
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "splash": {
+        "image": "./assets/images/upcr-logo.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#ffffff"
+      }
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/upcr-logo.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
